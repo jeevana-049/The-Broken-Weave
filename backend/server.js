@@ -1,87 +1,80 @@
-// server.js - COMPLETE CODE (Updated for Localhost Only)
-
 const express = require('express');
-const mysql = require('mysql2/promise');
+const mysql = require('mysql2/promise'); // Using mysql2 with promise support
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-const path = require('path'); // Essential for handling file paths correctly
-const multer = require('multer');
-const fs = require('fs/promises'); // For file system operations (e.g., deleting images)
+// const path = require('path'); // Not needed for Vercel functions directly serving API
+// const multer = require('multer'); // Removed for Vercel serverless deployment (no file storage)
+// const fs = require('fs/promises'); // Removed for Vercel serverless deployment
 
 const app = express();
-const port = 3000; // Your server port - confirmed to be 5500
-const BASE_URL = 'http://localhost:3000'; // Make sure this is 5500!
+
 // Middleware
 app.use(cors()); // Enables Cross-Origin Resource Sharing for all origins
 app.use(express.json()); // Parses JSON bodies of incoming requests
 
-// --- IMPORTANT: Serve static files from the 'frontend' folder ---
-// This makes all files in the 'frontend' directory (like index.html, styles.css, login.html etc.)
-// accessible directly via the web server.
-// path.join(__dirname, '..', 'frontend') ensures that the server correctly finds
-// the 'frontend' folder, which is a sibling to the 'backend' folder where server.js resides.
-//app.use(express.static(path.join(__dirname, '..', 'frontend')));
+// --- Database Connection Pool Setup using environment variables ---
+let pool; // Declare pool outside the function to reuse connection across invocations
 
-// --- Multer Configuration for Image Uploads ---
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        // Ensure 'uploads/' directory exists in your project root
-        // This 'uploads' folder should be a sibling to 'backend' and 'frontend'
-        cb(null, path.join(__dirname, '..', 'uploads')); // Corrected path for uploads folder
-    },
-    filename: (req, file, cb) => {
-        // Unique filename for uploaded images to prevent conflicts
-        cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+async function getDbConnection() {
+    if (!pool) {
+        try {
+            // Ensure environment variables are set before creating the pool
+            if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_DATABASE) {
+                throw new Error('Database environment variables are not set. Please configure DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE.');
+            }
+
+            pool = mysql.createPool({
+                host: process.env.DB_HOST,
+                user: process.env.DB_USER,
+                password: process.env.DB_PASSWORD,
+                database: process.env.DB_DATABASE,
+                waitForConnections: true,
+                connectionLimit: 10, // Max number of connections in the pool
+                queueLimit: 0,       // No limit on connection queue
+                // Recommended for serverless to keep connections alive
+                keepAliveInitialDelay: 10000, // 10 seconds
+                enableKeepAlive: true
+            });
+            console.log('Database pool created successfully.');
+
+            // Optional: Test connection immediately after pool creation
+            const connection = await pool.getConnection();
+            console.log('Successfully connected to MySQL database via pool!');
+            connection.release(); // Release the connection back to the pool
+        } catch (err) {
+            console.error('Failed to initialize MySQL database pool:', err);
+            // Re-throw the error to ensure Vercel deployment fails if DB connection is bad
+            throw err;
+        }
     }
-});
-const upload = multer({ storage: storage });
+    return pool;
+}
 
-// Serve static files from the 'uploads' directory
-// This makes uploaded images accessible via /uploads/filename.jpg from the browser
-// The path here should also be relative to the project root
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
-// --- END MULTER CONFIG ---
-
-
-// Database Connection Pool Setup
-const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root', // Your MySQL username
-    password: 'root', // Your MySQL password
-    database: 'the_broken_weave_db', // Your database name
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
-
-// Test Database Connection
-pool.getConnection()
-    .then(connection => {
-        console.log('Successfully connected to MySQL database!');
-        connection.release(); // Release the connection back to the pool
-    })
-    .catch(err => {
-        console.error('Failed to connect to MySQL database:', err);
-    });
-
-// --- Middleware for Admin Protection ---
-// Checks for a custom header 'x-user-is-admin' set to 'true'
+// --- Middleware for Admin Protection (from your code) ---
 const isAdmin = (req, res, next) => {
+    // This checks for a custom header 'x-user-is-admin' set to 'true'
+    // In a real application, you'd verify a JWT token or session.
     if (req.headers['x-user-is-admin'] === 'true') {
-        next(); // User is admin, proceed to the next middleware/route handler
+        next();
     } else {
         res.status(403).json({ message: 'Access denied. Administrator privileges required.' });
     }
 };
 // --- END ADMIN MIDDLEWARE ---
 
+// --- API Routes ---
 
-// API Routes
-
-// Root/Home route: Serves your main index.html file when accessing the base URL (e.g., your IP:Port)
-// This route takes precedence over express.static for the exact '/' path.
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
+// Health Check Route (Good for Vercel to verify deployment)
+app.get('/api/health', async (req, res) => {
+    try {
+        const pool = await getDbConnection();
+        // Try a simple query to check database connectivity
+        await pool.query('SELECT 1');
+        res.status(200).json({ status: 'ok', message: 'Backend and Database are healthy!' });
+    } catch (error) {
+        console.error('Health check failed:', error);
+        res.status(500).json({ status: 'error', message: 'Backend or Database unhealthy.', error: error.message });
+    }
 });
 
 // 1. User Registration Route
@@ -93,6 +86,7 @@ app.post('/api/register', async (req, res) => {
     }
 
     try {
+        const pool = await getDbConnection(); // Get the connection pool
         // Check if username or email already exists
         const [existingUsers] = await pool.execute(
             'SELECT id FROM users WHERE username = ? OR email = ?',
@@ -131,6 +125,7 @@ app.post('/api/login', async (req, res) => {
     }
 
     try {
+        const pool = await getDbConnection(); // Get the connection pool
         // Retrieve user by username
         const [users] = await pool.execute(
             'SELECT id, username, password, is_admin FROM users WHERE username = ?',
@@ -166,22 +161,18 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// 3. Report Missing Person Route
-app.post('/api/missing-persons', upload.single('image'), async (req, res) => {
+// 3. Report Missing Person Route (Image Uploads Disabled for Vercel)
+// Removed `upload.single('image')` middleware as file uploads are not supported directly on Vercel functions
+app.post('/api/missing-persons', async (req, res) => {
     const { name, dob, category, last_known_location, contact_info, description } = req.body;
-    // The image URL stored in DB should be relative to the /uploads static route
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const imageUrl = null; // Image uploads are disabled for Vercel deployment
 
     if (!name || !category || !last_known_location || !contact_info) {
-        // If image is uploaded but required fields are missing, delete the uploaded image
-        if (req.file) {
-            // fs.unlink needs the full path to delete the file
-            await fs.unlink(req.file.path).catch(err => console.error("Failed to delete temp image:", err));
-        }
         return res.status(400).json({ message: 'Missing required fields: name, category, last_known_location, contact_info.' });
     }
 
     try {
+        const pool = await getDbConnection(); // Get the connection pool
         const query = `
             INSERT INTO MISSING_PERSONS (name, dob, category, last_known_location, contact_info, description, image_url, reported_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
@@ -190,10 +181,6 @@ app.post('/api/missing-persons', upload.single('image'), async (req, res) => {
 
         res.status(201).json({ message: 'Missing person reported successfully!', id: result.insertId, imageUrl: imageUrl });
     } catch (error) {
-        // If there's a database error, delete the uploaded image to prevent orphaned files
-        if (req.file) {
-            await fs.unlink(req.file.path).catch(err => console.error("Failed to delete image on DB error:", err));
-        }
         console.error('Error reporting missing person:', error);
         res.status(500).json({ message: 'Server error reporting missing person.', error: error.message });
     }
@@ -202,6 +189,7 @@ app.post('/api/missing-persons', upload.single('image'), async (req, res) => {
 // API Endpoint to Get All Missing Persons
 app.get('/api/missing-persons', async (req, res) => {
     try {
+        const pool = await getDbConnection();
         // Fetches all missing persons, formatted date for readability
         const sql = 'SELECT id, name, dob, category, last_known_location, contact_info, description, image_url, status, DATE_FORMAT(reported_at, "%Y-%m-%d %H:%i:%s") AS reported_at_formatted FROM MISSING_PERSONS ORDER BY reported_at DESC';
         const [rows] = await pool.execute(sql);
@@ -218,6 +206,7 @@ app.get('/api/missing-persons/search', async (req, res) => {
     const categoryFilter = req.query.category || ''; // Category filter from query parameter 'category'
 
     try {
+        const pool = await getDbConnection();
         let sql = `
             SELECT id, name, dob, last_known_location, contact_info, description, reported_at, category, status, image_url
             FROM MISSING_PERSONS
@@ -244,6 +233,7 @@ app.get('/api/missing-persons/search', async (req, res) => {
 // 5. Get Success Stories Route (Found Persons)
 app.get('/api/success-stories', async (req, res) => {
     try {
+        const pool = await getDbConnection();
         const query = `
             SELECT id, name, dob, last_known_location, contact_info, description, reported_at, category, image_url
             FROM MISSING_PERSONS
@@ -262,6 +252,7 @@ app.get('/api/success-stories', async (req, res) => {
 // API Endpoint to Get All Volunteers (Admin Protected)
 app.get('/api/volunteers', isAdmin, async (req, res) => {
     try {
+        const pool = await getDbConnection();
         const query = `SELECT id, name, email, phone, skills, availability, message, registered_at FROM VOLUNTEERS ORDER BY registered_at DESC`;
         const [volunteers] = await pool.execute(query);
 
@@ -277,6 +268,7 @@ app.patch('/api/missing-persons/:id/found', isAdmin, async (req, res) => {
     const personId = req.params.id;
 
     try {
+        const pool = await getDbConnection();
         const [result] = await pool.execute(
             'UPDATE MISSING_PERSONS SET status = ? WHERE id = ?',
             ['found', personId]
@@ -294,71 +286,16 @@ app.patch('/api/missing-persons/:id/found', isAdmin, async (req, res) => {
     }
 });
 
-// API Endpoint to Update Missing Person's Photo (Admin Protected)
-app.patch('/api/missing-persons/:id/image', isAdmin, upload.single('image'), async (req, res) => {
+// API Endpoint to Update Missing Person's Photo (Admin Protected) - Image upload disabled for Vercel
+// Removed `upload.single('image')` middleware.
+app.patch('/api/missing-persons/:id/image', isAdmin, async (req, res) => {
     const personId = req.params.id;
-    // New image URL will be relative to the /uploads static route
-    const newImageUrl = req.file ? `/uploads/${req.file.filename}` : null;
-
-    if (!newImageUrl) {
-        return res.status(400).json({ message: 'No image file provided.' });
-    }
-
-    let connection;
-    try {
-        connection = await pool.getConnection(); // Get a connection from the pool
-        await connection.beginTransaction(); // Start a transaction
-
-        // 1. Get the old image URL (if any) from the database
-        const [persons] = await connection.execute('SELECT image_url FROM MISSING-PERSONS WHERE id = ?', [personId]);
-
-        if (persons.length === 0) {
-            await connection.rollback(); // Rollback transaction
-            return res.status(404).json({ message: 'Missing person not found.' });
-        }
-        const oldImageUrl = persons[0].image_url;
-
-        // 2. Update the database with the new image URL
-        const [updateResult] = await connection.execute(
-            'UPDATE MISSING_PERSONS SET image_url = ? WHERE id = ?',
-            [newImageUrl, personId]
-        );
-
-        if (updateResult.affectedRows === 0) {
-            await connection.rollback(); // Rollback transaction
-            return res.status(404).json({ message: 'Missing person not found or no changes made.' });
-        }
-
-        // 3. Delete the old image file from the server (if it exists and is different from the new one)
-        // Construct full path for deletion: Go up from 'backend', then to 'uploads'
-        if (oldImageUrl && oldImageUrl !== newImageUrl) {
-            const oldImagePath = path.join(__dirname, '..', oldImageUrl);
-            try {
-                // Check if file exists before attempting to delete
-                await fs.access(oldImagePath);
-                await fs.unlink(oldImagePath); // Delete the file
-                console.log(`Old image deleted: ${oldImagePath}`);
-            } catch (fileError) {
-                // It's okay if the old file doesn't exist (e.g., first upload, or file already deleted)
-                console.warn(`Could not delete old image ${oldImagePath}: ${fileError.message}`);
-            }
-        }
-
-        await connection.commit(); // Commit transaction
-        res.status(200).json({ message: 'Photo updated successfully!', newImageUrl: newImageUrl });
-
-    } catch (error) {
-        if (connection) {
-            await connection.rollback(); // Rollback transaction on error
-        }
-        console.error('Error updating missing person photo:', error);
-        res.status(500).json({ message: 'Server error updating photo.', error: error.message });
-    } finally {
-        if (connection) {
-            connection.release(); // Release the connection back to the pool
-        }
-    }
+    // Image uploads are disabled, so we'll just acknowledge the attempt but won't process a new image file.
+    // In a full solution, you'd use a cloud storage service like Cloudinary or AWS S3 here.
+    console.warn('Image upload functionality is disabled for Vercel serverless functions.');
+    return res.status(501).json({ message: 'Image upload is temporarily disabled. Please contact support.' }); // 501 Not Implemented
 });
+
 
 // NEW: API Endpoint to Update ALL Missing Person Details (Admin Protected)
 app.patch('/api/missing-persons/:id', isAdmin, async (req, res) => {
@@ -370,6 +307,7 @@ app.patch('/api/missing-persons/:id', isAdmin, async (req, res) => {
     }
 
     try {
+        const pool = await getDbConnection();
         const [result] = await pool.execute(
             `UPDATE MISSING_PERSONS
              SET name = ?, dob = ?, category = ?, last_known_location = ?, contact_info = ?, description = ?
@@ -390,59 +328,47 @@ app.patch('/api/missing-persons/:id', isAdmin, async (req, res) => {
 });
 
 
-// NEW: API Endpoint to Delete Missing Person (Admin Protected)
+// NEW: API Endpoint to Delete Missing Person (Admin Protected) - Image deletion disabled for Vercel
 app.delete('/api/missing-persons/:id', isAdmin, async (req, res) => {
     const personId = req.params.id;
-    let connection;
+    let connection; // Declare connection for finally block
 
     try {
-        connection = await pool.getConnection(); // Get a connection from the pool
-        await connection.beginTransaction(); // Start a transaction
+        connection = await getDbConnection(); // Use getDbConnection to get pool, then connection
+        // Start a transaction (good practice)
+        await connection.beginTransaction();
 
-        // 1. Get the image URL before deleting the record
+        // 1. Get the image URL (but we won't delete the file on Vercel)
         const [persons] = await connection.execute('SELECT image_url FROM MISSING_PERSONS WHERE id = ?', [personId]);
 
         if (persons.length === 0) {
-            await connection.rollback(); // Rollback transaction
+            await connection.rollback();
             return res.status(404).json({ message: 'Missing person not found.' });
         }
-        const imageUrlToDelete = persons[0].image_url;
 
         // 2. Delete the record from the database
         const [deleteResult] = await connection.execute('DELETE FROM MISSING_PERSONS WHERE id = ?', [personId]);
 
         if (deleteResult.affectedRows === 0) {
-            await connection.rollback(); // Rollback transaction if no rows were affected
+            await connection.rollback();
             return res.status(404).json({ message: 'Missing person not found or already deleted.' });
         }
 
-        // 3. Delete the associated image file from the server
-        // Construct full path for deletion: Go up from 'backend', then to 'uploads'
-        if (imageUrlToDelete) {
-            const imagePath = path.join(__dirname, '..', imageUrlToDelete); // Corrected path for deletion
-            try {
-                // Check if file exists before attempting to delete
-                await fs.access(imagePath);
-                await fs.unlink(imagePath); // Delete the file
-                console.log(`Associated image deleted: ${imagePath}`);
-            } catch (fileError) {
-                // Log warning if file deletion fails (e.g., file doesn't exist, permissions)
-                console.warn(`Could not delete associated image ${imagePath}: ${fileError.message}`);
-            }
-        }
+        // Image file deletion logic removed for Vercel serverless functions
+        console.warn('Image file deletion functionality is disabled for Vercel serverless functions.');
 
-        await connection.commit(); // Commit transaction
-        res.status(200).json({ message: `Missing person ID ${personId} and associated image deleted successfully.` });
+        await connection.commit();
+        res.status(200).json({ message: `Missing person ID ${personId} deleted successfully (image file not deleted from server).` });
 
     } catch (error) {
         if (connection) {
-            await connection.rollback(); // Rollback transaction on error
+            await connection.rollback();
         }
         console.error('Error deleting missing person:', error);
         res.status(500).json({ message: 'Server error deleting missing person.', error: error.message });
     } finally {
         if (connection) {
-            connection.release(); // Release the connection back to the pool
+            connection.release();
         }
     }
 });
@@ -457,6 +383,7 @@ app.post('/api/volunteer/register', async (req, res) => {
     }
 
     try {
+        const pool = await getDbConnection();
         const query = `
             INSERT INTO VOLUNTEERS (name, email, phone, skills, availability, message)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -471,10 +398,6 @@ app.post('/api/volunteer/register', async (req, res) => {
     }
 });
 
-
-// Start the server
-app.listen(port, '0.0.0.0', () => { // ADDED '0.0.0.0' for network access
-    console.log(`Backend server listening on port ${port}`);
-    console.log(`Access from your computer: http://localhost:${port}`);
-    console.log(`Access from other devices on your network: http://192.168.74.29:${port}`);
-});
+// --- FINAL EXPORT FOR VERCEL ---
+// This line replaces app.listen() and is crucial for Vercel to recognize your Express app
+module.exports = app;
