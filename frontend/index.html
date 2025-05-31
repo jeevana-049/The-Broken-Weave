@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Broken Weave - Home</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <style>
+        /* Existing Styles for header, nav, footer, etc. (assuming they are in style.css or similar) */
+        /* If not, you might need to add basic body, header, nav, footer styles here or in style.css */
+        
+        /* Styles from your provided HTML */
+        .search-section {
+            background-color: #f8f9fa;
+            padding: 40px 20px;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+            margin-top: 30px;
+        }
+        .search-section h2 {
+            font-size: 2.5em;
+            color: #343a40;
+            margin-bottom: 25px;
+        }
+        .search-form {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px; /* Space between input and button */
+            margin-bottom: 30px;
+        }
+        .search-form input[type="text"] {
+            padding: 12px 15px;
+            width: 70%; /* Adjust width as needed */
+            max-width: 500px;
+            border: 2px solid #007bff;
+            border-radius: 25px; /* Rounded corners */
+            font-size: 1.1em;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .search-form input[type="text"]:focus {
+            border-color: #0056b3;
+            box-shadow: 0 0 8px rgba(0, 123, 255, 0.6);
+            outline: none;
+        }
+        .search-form button {
+            padding: 12px 25px;
+            background-color: #28a745; /* Green for search button */
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: bold;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .search-form button:hover {
+            background-color: #218838;
+            transform: translateY(-2px); /* Slight lift effect */
+        }
+        .search-results {
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            text-align: left;
+            min-height: 150px; /* Give it some minimum height */
+            margin: 0 auto;
+            max-width: 800px; /* Max width for results container */
+        }
+        .search-results h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.6em;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+        .search-results .result-item {
+            border-bottom: 1px dashed #eee;
+            padding: 15px 0;
+        }
+        .search-results .result-item:last-child {
+            border-bottom: none;
+        }
+        .search-results .result-item h4 {
+            color: #007bff;
+            margin-bottom: 5px;
+            font-size: 1.3em;
+        }
+        .search-results .result-item p {
+            color: #666;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+        .search-results .no-results {
+            color: #888;
+            font-style: italic;
+            text-align: center;
+            padding: 30px;
+        }
+
+        /* NEW STYLES for Mission Section and Donate Button */
+        .mission-section {
+            text-align: center;
+            padding: 40px 20px;
+            background-color: #e0f2f7; /* Light blue background */
+            margin-bottom: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .mission-section h2 {
+            color: #0056b3; /* Darker blue for heading */
+            margin-bottom: 20px;
+            font-size: 2.2em;
+        }
+        .mission-section p {
+            font-size: 1.1em;
+            color: #444;
+            max-width: 800px;
+            margin: 0 auto 30px auto;
+            line-height: 1.8;
+        }
+        .donate-button {
+            display: inline-block;
+            background-color: #28a745; /* Green for donate */
+            color: white;
+            padding: 15px 30px;
+            font-size: 1.3em;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .donate-button:hover {
+            background-color: #218838;
+            transform: translateY(-2px);
+        }
+        /* Style for the button-link if it's not in style.css */
+        .button-link {
+            display: inline-block;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px;
+            transition: background-color 0.3s ease;
+        }
+        .button-link:hover {
+            opacity: 0.9;
+        }
+        /* Style for hidden items */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>The Broken Weave</h1>
+        <nav id="mainNav"> <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="register.html">Register</a></li>
+                <li><a href="report-missing.html">Report Missing</a></li>
+                <li><a href="viewMissing.html">View Missing</a></li>
+                <li><a href="login.html">Login</a></li>
+                <li><a href="donate.html">Donate</a></li>
+                <li><a href="howToHelp.html">How to Help</a></li>
+                <li><a href="volunteerRegister.html">Volunteer</a></li>
+                <li id="viewVolunteersNavLink"><a href="viewVolunteers.html">View Volunteers</a></li> <li id="logoutNavLink" class="hidden"><a href="#" id="logoutButton">Logout</a></li> </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <h2>Bringing Families Back Together</h2>
+            <p>Support for children, women, and senior citizens separated during communal unrest.</p>
+            <a href="reportMissing.html" class="button">Report a Missing Person</a>
+        </section>
+
+        <section class="mission-section">
+            <h2>Our Mission: Beyond Finding, Towards Healing</h2>
+            <p>
+                At The Broken Weave, we believe every individual deserves safety, support, and the chance to thrive. While our core mission is to help locate missing persons, we recognize that many face underlying challenges related to education, healthcare, economic stability, and protection.
+                We aim to connect those in need with resources and support from a caring community. Your contribution can help us provide essential aid and rebuild lives.
+            </p>
+            <a href="donate.html" class="donate-button">Donate Now & Make a Difference!</a>
+        </section>
+        
+        <section class="success-stories-section">
+            <h2>Recent Reports & Success Stories</h2>
+            <div class="stories-container" id="storiesContainer">
+                <p class="loading-message">Loading stories...</p>
+            </div>
+        </section>
+    </main>
+    
+    <section class="search-section">
+        <h2>Find a Missing Person</h2>
+        <form class="search-form" id="searchForm">
+            <input type="text" id="searchQuery" placeholder="Search by name, last location, etc.">
+            <button type="submit">Search</button>
+        </form>
+        <div class="search-results" id="searchResults">
+            <h3>Search Results</h3>
+            <p class="no-results">Results will appear here.</p>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2025 The Broken Weave. All rights reserved.</p>
+    </footer>
+
+    <script src="script.js"></script> 
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+            const viewVolunteersNavLink = document.getElementById('viewVolunteersNavLink');
+            const logoutNavLink = document.getElementById('logoutNavLink');
+            const logoutButton = document.getElementById('logoutButton');
+            const loginNavLink = document.querySelector('nav ul li a[href="login.html"]').closest('li'); // Find login link's parent li
+
+            // Hide the View Volunteers link by default
+            if (viewVolunteersNavLink) {
+                viewVolunteersNavLink.classList.add('hidden');
+            }
+            // Hide the Logout link by default
+            if (logoutNavLink) {
+                logoutNavLink.classList.add('hidden');
+            }
+
+            // If a user is logged in
+            if (loggedInUser) {
+                // Hide the Login link
+                if (loginNavLink) {
+                    loginNavLink.classList.add('hidden');
+                }
+                // Show the Logout link
+                if (logoutNavLink) {
+                    logoutNavLink.classList.remove('hidden');
+                }
+
+                // If the logged-in user is an admin, show the View Volunteers link
+                if (loggedInUser.is_admin) {
+                    if (viewVolunteersNavLink) {
+                        viewVolunteersNavLink.classList.remove('hidden');
+                    }
+                }
+            } else {
+                // If no user is logged in, ensure Login link is visible (default)
+                if (loginNavLink) {
+                    loginNavLink.classList.remove('hidden');
+                }
+            }
+
+            // Add event listener for logout
+            if (logoutButton) {
+                logoutButton.addEventListener('click', (e) => {
+                    e.preventDefault(); // Prevent default link behavior
+                    localStorage.removeItem('loggedInUser'); // Clear user from localStorage
+                    window.location.href = 'index.html'; // Redirect to home or login page
+                });
+            }
+        });
+    </script>
+</body>
+</html>

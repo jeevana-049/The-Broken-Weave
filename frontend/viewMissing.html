@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Missing Persons - The Broken Weave</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Specific styling for the missing persons table */
+        main {
+            padding: 40px 20px;
+            max-width: 1400px; /* Increased max-width for better table and modals */
+            margin: 40px auto;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center; /* Center content within main */
+        }
+        main h2 {
+            color: #007bff;
+            font-size: 2.5em;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+            text-align: center;
+        }
+        .loading-message, .error-message, .no-records-message {
+            padding: 20px;
+            text-align: center;
+            font-size: 1.1em;
+            color: #666;
+        }
+        .error-message {
+            color: #d9534f; /* Red for errors */
+            background-color: #f2dede;
+            border: 1px solid #ebccd1;
+            border-radius: 5px;
+        }
+        .success-message {
+            color: #28a745;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 20px;
+            display: none;
+            text-align: center;
+        }
+
+
+        .missing-persons-table-container {
+            overflow-x: auto; /* Allows horizontal scrolling for wide tables */
+            margin-top: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0 auto; /* Center the table if container allows */
+            min-width: 800px; /* Ensure table is wide enough to prevent squishing */
+        }
+        th, td {
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            text-align: left;
+            vertical-align: top; /* Align text to top for multi-line content */
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            color: #333;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #e9e9e9;
+        }
+        .description-column {
+            max-width: 250px; /* Limit width for description */
+            word-wrap: break-word; /* Allow long words to break */
+        }
+        .reported-at-column {
+            white-space: nowrap; /* Keep date/time on one line */
+            font-size: 0.9em;
+        }
+        .status-column {
+            font-weight: bold;
+        }
+        .status-found {
+            color: green;
+        }
+        .status-missing {
+            color: orange;
+        }
+        .status-other {
+            color: gray;
+        }
+
+        /* Image Styling */
+        .person-image {
+            max-width: 80px;  /* Small size for table display */
+            max-height: 80px; /* Maintain aspect ratio */
+            border-radius: 4px;
+            object-fit: cover; /* Crop image to fit */
+            display: block; /* Remove extra space below image */
+            margin: 0 auto; /* Center image in cell */
+        }
+        /* Style for hidden items (from index.html, needed for nav) */
+        .hidden {
+            display: none !important;
+        }
+        /* Style for action buttons */
+        .action-buttons-container {
+            display: flex;
+            flex-direction: column; /* Stack buttons vertically */
+            gap: 5px; /* Space between buttons */
+            align-items: center; /* Center buttons horizontally in cell */
+            padding: 5px;
+        }
+        .change-photo-btn, .mark-found-btn, .edit-details-btn, .delete-btn {
+            padding: 6px 10px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.3s ease;
+            white-space: nowrap; /* Keep button text on one line */
+            width: 100%; /* Make buttons fill container width */
+            box-sizing: border-box; /* Include padding and border in width */
+        }
+        .change-photo-btn {
+            background-color: #007bff;
+        }
+        .change-photo-btn:hover {
+            background-color: #0056b3;
+        }
+        .mark-found-btn {
+            background-color: #28a745; /* Green */
+        }
+        .mark-found-btn:hover {
+            background-color: #218838;
+        }
+        .mark-found-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .edit-details-btn {
+            background-color: #ffc107; /* Yellow/Orange */
+            color: #333; /* Dark text for contrast */
+        }
+        .edit-details-btn:hover {
+            background-color: #e0a800;
+        }
+        .delete-btn {
+            background-color: #dc3545; /* Red */
+        }
+        .delete-btn:hover {
+            background-color: #c82333;
+        }
+
+
+        /* Modal Styles (shared for all modals) */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            /* Use flexbox for centering */
+            justify-content: center; /* Center horizontally */
+            align-items: center; /* Center vertically */
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 25px;
+            border: 1px solid #888;
+            border-radius: 10px;
+            width: 80%; /* Could be responsive */
+            max-width: 500px; /* Max width for modal */
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            position: relative; /* For close button positioning */
+        }
+
+        .close-button {
+            color: #aaa;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .modal-content h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #333;
+            text-align: center;
+        }
+        .modal-content label {
+            display: block;
+            margin-bottom: 5px; /* Adjusted for tighter spacing in forms */
+            font-weight: bold;
+            text-align: left; /* Align labels left */
+        }
+        .modal-content input[type="text"],
+        .modal-content input[type="date"],
+        .modal-content input[type="email"],
+        .modal-content select,
+        .modal-content textarea,
+        .modal-content input[type="file"] {
+            width: calc(100% - 22px); /* Adjusted for padding */
+            padding: 10px;
+            margin-bottom: 15px; /* Adjusted for tighter spacing in forms */
+            border: 1px solid #ccc;
+            border-radius: 4ഴുംpx;
+            box-sizing: border-box;
+        }
+        .modal-content textarea {
+            min-height: 80px;
+            resize: vertical; /* Allow vertical resizing */
+        }
+        .modal-content button[type="submit"] {
+            width: 100%;
+            padding: 10px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: background-color 0.3s ease;
+        }
+        .modal-content button[type="submit"]:hover {
+            background-color: #218838;
+        }
+        .modal-message {
+            margin-top: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .modal-message.success {
+            color: green;
+        }
+        .modal-message.error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>The Broken Weave</h1>
+        <nav id="mainNav">
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="register.html">Register</a></li>
+                <li><a href="report-missing.html">Report Missing</a></li>
+                <li><a href="viewMissing.html">View Missing</a></li>
+                <li><a href="login.html">Login</a></li>
+                <li><a href="donate.html">Donate</a></li>
+                <li><a href="howToHelp.html">How to Help</a></li>
+                <li><a href="volunteerRegister.html">Volunteer</a></li>
+                <li id="viewVolunteersNavLink" class="hidden"><a href="viewVolunteers.html">View Volunteers</a></li>
+                <li id="logoutNavLink" class="hidden"><a href="#" id="logoutButton">Logout</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <h2>All Missing Persons Reports</h2>
+        <div class="success-message" id="actionSuccessMessage" style="display: none;"></div>
+
+        <div class="loading-message" id="loadingMessage">Loading reports...</div>
+        <div class="error-message" id="errorMessage" style="display: none;"></div>
+        <div class="no-records-message" id="noRecordsMessage" style="display: none;">No missing persons reported yet.</div>
+
+        <div class="missing-persons-table-container">
+            <table id="missingPersonsTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Last Location</th>
+                        <th>Contact</th>
+                        <th>Description</th>
+                        <th>Photo</th>
+                        <th>Actions</th>
+                        <th>Reported At</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 The Broken Weave. All rights reserved.</p>
+    </footer>
+
+    <div id="imageChangeModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeImageModal()">&times;</span>
+            <h3>Change Photo for Missing Person</h3>
+            <form id="imageUploadForm" enctype="multipart/form-data">
+                <input type="hidden" id="modalPersonId">
+                <label for="newPersonImage">Select New Photo:</label>
+                <input type="file" id="newPersonImage" name="image" accept="image/*" required>
+                <button type="submit">Upload New Photo</button>
+                <p id="modalMessage" class="modal-message"></p>
+            </form>
+        </div>
+    </div>
+    <div id="editMissingPersonModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeEditModal()">&times;</span>
+            <h3>Edit Missing Person Details</h3>
+            <form id="editPersonForm">
+                <input type="hidden" id="editPersonId">
+
+                <label for="editName">Name:</label>
+                <input type="text" id="editName" name="name" required>
+
+                <label for="editDOB">Date of Birth (Optional):</label>
+                <input type="date" id="editDOB" name="dob">
+
+                <label for="editCategory">Category:</label>
+                <select id="editCategory" name="category" required>
+                    <option value="">Select Category</option>
+                    <option value="Child">Child</option>
+                    <option value="Adult">Adult</option>
+                    <option value="Elderly">Elderly</option>
+                    <option value="Other">Other</option>
+                </select>
+
+                <label for="editLastKnownLocation">Last Known Location:</label>
+                <input type="text" id="editLastKnownLocation" name="last_known_location" required>
+
+                <label for="editContactInfo">Contact Info:</label>
+                <input type="text" id="editContactInfo" name="contact_info" required>
+
+                <label for="editDescription">Description (Optional):</label>
+                <textarea id="editDescription" name="description" rows="4"></textarea>
+
+                <button type="submit">Save Changes</button>
+                <p id="editModalMessage" class="modal-message"></p>
+            </form>
+        </div>
+    </div>
+    <script>
+    let currentPersonId = null;
+    let loggedInUser = null;
+    let allMissingPersonsData = []; // Store all fetched persons for easy access when editing
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+        const viewVolunteersNavLink = document.getElementById('viewVolunteersNavLink');
+        const logoutNavLink = document.getElementById('logoutNavLink');
+        const logoutButton = document.getElementById('logoutButton');
+        const loginNavLink = document.querySelector('nav ul li a[href="login.html"]').closest('li');
+
+        if (viewVolunteersNavLink) {
+            viewVolunteersNavLink.classList.add('hidden');
+        }
+        if (logoutNavLink) {
+            logoutNavLink.classList.add('hidden');
+        }
+
+        if (loggedInUser) {
+            if (loginNavLink) {
+                loginNavLink.classList.add('hidden');
+            }
+            if (logoutNavLink) {
+                logoutNavLink.classList.remove('hidden');
+            }
+
+            if (loggedInUser.is_admin) {
+                if (viewVolunteersNavLink) {
+                    viewVolunteersNavLink.classList.remove('hidden');
+                }
+            }
+        } else {
+            if (loginNavLink) {
+                loginNavLink.classList.remove('hidden');
+            }
+        }
+
+        if (logoutButton) {
+            logoutButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                localStorage.removeItem('loggedInUser');
+                window.location.href = 'index.html';
+            });
+        }
+        fetchMissingPersons();
+    });
+
+    async function fetchMissingPersons() {
+    const loadingMessage = document.getElementById('loadingMessage');
+    const errorMessage = document.getElementById('errorMessage');
+    const noRecordsMessage = document.getElementById('noRecordsMessage');
+    const missingPersonsTable = document.getElementById('missingPersonsTable');
+    const tableBody = missingPersonsTable.querySelector('tbody');
+    const tableHead = missingPersonsTable.querySelector('thead tr'); // Get the header row
+    const actionSuccessMessage = document.getElementById('actionSuccessMessage');
+
+    loadingMessage.style.display = 'block';
+    errorMessage.style.display = 'none';
+    noRecordsMessage.style.display = 'none';
+    missingPersonsTable.style.display = 'none';
+    actionSuccessMessage.style.display = 'none';
+    tableBody.innerHTML = ''; // Clear previous data
+    allMissingPersonsData = []; // Clear previous data
+
+    // Dynamically set up the table headers
+    let headersHtml = `
+        <th>ID</th>
+        <th>Name</th>
+        <th>Category</th>
+        <th>Last Location</th>
+        <th>Contact</th>
+        <th>Description</th>
+        <th>Photo</th>
+    `;
+    let includeActionsColumn = false;
+    if (loggedInUser && loggedInUser.is_admin) {
+        headersHtml += `<th>Actions</th>`;
+        includeActionsColumn = true;
+    }
+    headersHtml += `
+        <th>Reported At</th>
+        <th>Status</th>
+    `;
+    tableHead.innerHTML = headersHtml; // Set the updated header row
+
+    try {
+        const response = await fetch('http://localhost:3000/api/missing-persons'); // THIS IS THE CORRECTED LINE
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const missingPersons = await response.json();
+        allMissingPersonsData = missingPersons; // Store fetched data
+
+        if (missingPersons.length === 0) {
+            noRecordsMessage.style.display = 'block';
+        } else {
+            missingPersons.forEach(person => {
+                const row = tableBody.insertRow();
+                const statusClass = person.status === 'found' ? 'status-found' : 'status-missing';
+
+                const imageHtml = person.image_url
+                    ? `<img src="http://localhost:5500${person.image_url}" alt="${person.name}" class="person-image">`
+                    : 'No Photo';
+
+                let adminActionsHtml = '';
+                if (includeActionsColumn) { // Only build action buttons if the column is included
+                    let markFoundButtonHtml = '';
+                    if (person.status !== 'found') {
+                        markFoundButtonHtml = `<button class="mark-found-btn" onclick="markAsFound(${person.id})">Mark as Found</button>`;
+                    }
+                    adminActionsHtml = `
+                        <button class="edit-details-btn" onclick="openEditModal(${person.id})">Edit Details</button>
+                        <button class="change-photo-btn" onclick="openImageModal(${person.id})">Change Photo</button>
+                        ${markFoundButtonHtml}
+                        <button class="delete-btn" onclick="deleteMissingPerson(${person.id})">Delete</button>
+                    `;
+                }
+
+                let rowHtml = `
+                    <td>${person.id}</td>
+                    <td>${person.name}</td>
+                    <td>${person.category}</td>
+                    <td>${person.last_known_location}</td>
+                    <td>${person.contact_info}</td>
+                    <td class="description-column">${person.description || 'N/A'}</td>
+                    <td>${imageHtml}</td>
+                `;
+
+                if (includeActionsColumn) { // Only add the action cell if the column is included
+                    rowHtml += `<td class="action-buttons-container">${adminActionsHtml}</td>`;
+                }
+
+                rowHtml += `
+                    <td class="reported-at-column">${person.reported_at_formatted || 'N/A'}</td>
+                    <td class="status-column ${statusClass}">${person.status}</td>
+                `;
+                row.innerHTML = rowHtml;
+            });
+            missingPersonsTable.style.display = 'table';
+        }
+    } catch (error) {
+        console.error('Error fetching missing persons:', error);
+        errorMessage.textContent = `Failed to load missing persons: ${error.message}. Please ensure the backend server is running.`;
+        errorMessage.style.display = 'block';
+    } finally {
+        loadingMessage.style.display = 'none';
+    }
+}
+
+    // Modal related functions (Image Change Modal)
+    function openImageModal(personId) {
+        currentPersonId = personId;
+        document.getElementById('modalPersonId').value = personId;
+        document.getElementById('imageChangeModal').style.display = 'flex';
+        document.getElementById('modalMessage').textContent = '';
+        document.getElementById('newPersonImage').value = '';
+    }
+
+    function closeImageModal() {
+        document.getElementById('imageChangeModal').style.display = 'none';
+    }
+
+    // Modal related functions (Edit Details Modal)
+    function openEditModal(personId) {
+        const person = allMissingPersonsData.find(p => p.id === personId);
+        if (!person) {
+            alert('Missing person data not found for editing.');
+            return;
+        }
+
+        document.getElementById('editPersonId').value = person.id;
+        document.getElementById('editName').value = person.name;
+        document.getElementById('editDOB').value = person.dob ? person.dob.split('T')[0] : '';
+        document.getElementById('editCategory').value = person.category;
+        document.getElementById('editLastKnownLocation').value = person.last_known_location;
+        document.getElementById('editContactInfo').value = person.contact_info;
+        document.getElementById('editDescription').value = person.description || '';
+
+        document.getElementById('editMissingPersonModal').style.display = 'flex';
+        document.getElementById('editModalMessage').textContent = ''; // Clear message
+    }
+
+    function closeEditModal() {
+        document.getElementById('editMissingPersonModal').style.display = 'none';
+    }
+
+    // Close modals if user clicks outside of them
+    window.onclick = function(event) {
+        const imageModal = document.getElementById('imageChangeModal');
+        const editModal = document.getElementById('editMissingPersonModal');
+        if (event.target == imageModal) {
+            imageModal.style.display = "none";
+        }
+        if (event.target == editModal) {
+            editModal.style.display = "none";
+        }
+    }
+
+    document.getElementById('imageUploadForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const modalMessage = document.getElementById('modalMessage');
+        modalMessage.textContent = 'Uploading...';
+        modalMessage.className = 'modal-message';
+
+        if (!currentPersonId) {
+            modalMessage.textContent = 'Error: No person selected for photo change.';
+            modalMessage.classList.add('error');
+            return;
+        }
+
+        const imageInput = document.getElementById('newPersonImage');
+        if (imageInput.files.length === 0) {
+            modalMessage.textContent = 'Please select an image file.';
+            modalMessage.classList.add('error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('image', imageInput.files[0]);
+
+        const headers = {};
+        if (loggedInUser && loggedInUser.is_admin) {
+            headers['X-User-Is-Admin'] = 'true';
+        } else {
+            modalMessage.textContent = 'Error: You must be logged in as an administrator to change photos.';
+            modalMessage.classList.add('error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:5500/api/missing-persons/${currentPersonId}/image`, {
+                method: 'PATCH',
+                body: formData,
+                headers: headers
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                modalMessage.textContent = data.message || 'Photo updated successfully!';
+                modalMessage.classList.add('success');
+                fetchMissingPersons();
+                setTimeout(() => {
+                    closeImageModal();
+                }, 1500);
+            } else {
+                modalMessage.textContent = data.message || 'Failed to update photo.';
+                modalMessage.classList.add('error');
+                console.error('Error response:', data);
+            }
+        } catch (error) {
+            console.error('Error updating missing person photo:', error);
+            modalMessage.textContent = 'Could not connect to server or a network error occurred.';
+            modalMessage.classList.add('error');
+        }
+    });
+
+    // NEW: Edit Person Form Submission Logic (UNCOMMENTED & FINALIZED)
+    document.getElementById('editPersonForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const editModalMessage = document.getElementById('editModalMessage');
+        editModalMessage.textContent = 'Saving changes...';
+        editModalMessage.className = 'modal-message'; // Reset class
+
+        const personIdToEdit = document.getElementById('editPersonId').value;
+
+        if (!loggedInUser || !loggedInUser.is_admin) {
+            editModalMessage.textContent = 'Error: You must be logged in as an administrator to edit details.';
+            editModalMessage.classList.add('error');
+            return;
+        }
+
+        const formData = {
+            name: document.getElementById('editName').value,
+            dob: document.getElementById('editDOB').value || null, // Send null if empty
+            category: document.getElementById('editCategory').value,
+            last_known_location: document.getElementById('editLastKnownLocation').value,
+            contact_info: document.getElementById('editContactInfo').value,
+            description: document.getElementById('editDescription').value || null // Send null if empty
+        };
+
+        try {
+            const response = await fetch(`http://localhost:5500/api/missing-persons/${personIdToEdit}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-User-Is-Admin': 'true'
+                },
+                body: JSON.stringify(formData)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                editModalMessage.textContent = data.message || 'Details updated successfully!';
+                editModalMessage.classList.add('success');
+                fetchMissingPersons(); // Refresh data to show changes
+                setTimeout(() => {
+                    closeEditModal();
+                }, 1500);
+            } else {
+                editModalMessage.textContent = data.message || 'Failed to update details.';
+                editModalMessage.classList.add('error');
+                console.error('Error response:', data);
+            }
+        } catch (error) {
+            console.error('Error updating missing person details:', error);
+            editModalMessage.textContent = 'Could not connect to server or a network error occurred.';
+            editModalMessage.classList.add('error');
+        }
+    });
+
+
+    // Function to mark a missing person as "Found"
+    async function markAsFound(personId) {
+        const actionSuccessMessage = document.getElementById('actionSuccessMessage');
+        actionSuccessMessage.style.display = 'none';
+
+        if (!loggedInUser || !loggedInUser.is_admin) {
+            actionSuccessMessage.textContent = 'Error: You must be logged in as an administrator to mark as found.';
+            actionSuccessMessage.classList.remove('success');
+            actionSuccessMessage.classList.add('error');
+            actionSuccessMessage.style.display = 'block';
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to mark person ID ${personId} as FOUND?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:5500/api/missing-persons/${personId}/found`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-User-Is-Admin': 'true'
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                actionSuccessMessage.textContent = data.message || `Person ID ${personId} marked as found successfully!`;
+                actionSuccessMessage.classList.remove('error');
+                actionSuccessMessage.classList.add('success');
+                actionSuccessMessage.style.display = 'block';
+                fetchMissingPersons();
+            } else {
+                actionSuccessMessage.textContent = data.message || 'Failed to mark as found.';
+                actionSuccessMessage.classList.remove('success');
+                actionSuccessMessage.classList.add('error');
+                actionSuccessMessage.style.display = 'block';
+                console.error('Error response from backend:', data);
+            }
+        } catch (error) {
+            console.error('Network error marking as found:', error);
+            actionSuccessMessage.textContent = 'Could not connect to server or a network error occurred.';
+            actionSuccessMessage.classList.remove('success');
+            actionSuccessMessage.classList.add('error');
+            actionSuccessMessage.style.display = 'block';
+        }
+        setTimeout(() => {
+            actionSuccessMessage.style.display = 'none';
+        }, 5000);
+    }
+
+    // NEW: Function to delete a missing person
+    async function deleteMissingPerson(personId) {
+        const actionSuccessMessage = document.getElementById('actionSuccessMessage');
+        actionSuccessMessage.style.display = 'none';
+
+        if (!loggedInUser || !loggedInUser.is_admin) {
+            actionSuccessMessage.textContent = 'Error: You must be logged in as an administrator to delete records.';
+            actionSuccessMessage.classList.remove('success');
+            actionSuccessMessage.classList.add('error');
+            actionSuccessMessage.style.display = 'block';
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to PERMANENTLY DELETE person ID ${personId} and ALL associated data? This cannot be undone.`)) {
+            return; // User cancelled
+        }
+
+        try {
+            const response = await fetch(`http://localhost:5500/api/missing-persons/${personId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-User-Is-Admin': 'true'
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                actionSuccessMessage.textContent = data.message || `Person ID ${personId} deleted successfully!`;
+                actionSuccessMessage.classList.remove('error');
+                actionSuccessMessage.classList.add('success');
+                actionSuccessMessage.style.display = 'block';
+                fetchMissingPersons(); // Refresh table to show changes
+            } else {
+                actionSuccessMessage.textContent = data.message || 'Failed to delete person.';
+                actionSuccessMessage.classList.remove('success');
+                actionSuccessMessage.classList.add('error');
+                actionSuccessMessage.style.display = 'block';
+                console.error('Error response from backend:', data);
+            }
+        } catch (error) {
+            console.error('Network error deleting person:', error);
+            actionSuccessMessage.textContent = 'Could not connect to server or a network error occurred.';
+            actionSuccessMessage.classList.remove('success');
+            actionSuccessMessage.classList.add('error');
+            actionSuccessMessage.style.display = 'block';
+        }
+        setTimeout(() => {
+            actionSuccessMessage.style.display = 'none';
+        }, 5000);
+    }
+</script>
+</body>
+</html>

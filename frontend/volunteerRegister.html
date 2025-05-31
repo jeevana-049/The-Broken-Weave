@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volunteer Registration - The Broken Weave</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* General form and page styling */
+        main {
+            padding: 40px 20px;
+            max-width: 700px;
+            margin: 40px auto;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        main h2 {
+            color: #007bff;
+            font-size: 2.5em;
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="email"],
+        .form-group input[type="tel"],
+        .form-group textarea,
+        .form-group select {
+            width: calc(100% - 20px); /* Adjust for padding */
+            padding: 12px 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1em;
+            box-sizing: border-box; /* Include padding in width */
+        }
+        .form-group textarea {
+            resize: vertical; /* Allow vertical resizing */
+            min-height: 80px;
+        }
+        .form-group input[type="submit"] {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background-color: #28a745; /* Green submit button */
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .form-group input[type="submit"]:hover {
+            background-color: #218838;
+            transform: translateY(-2px);
+        }
+        .response-message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .response-message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+        .response-message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>The Broken Weave</h1>
+        <nav>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="register.html">Register</a></li>
+                <li><a href="reportMissing.html">Report Missing</a></li>
+                <li><a href="viewMissing.html">View Missing</a></li>
+                <li><a href="login.html">Login</a></li>
+                <li><a href="donate.html">Donate</a></li>
+                <li><a href="howToHelp.html">How to Help</a></li>
+                <li><a href="volunteerRegister.html">Volunteer</a></li> </ul>
+        </nav>
+    </header>
+
+    <main>
+        <h2>Become a Volunteer</h2>
+        <p style="text-align: center; font-size: 1.05em; color: #666; margin-bottom: 30px;">
+            Your time and skills are invaluable. Join our community of volunteers and help us make a real difference in the lives of children, women, and senior citizens.
+        </p>
+        <form id="volunteerForm">
+            <div class="form-group">
+                <label for="name">Full Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email Address:</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="phone">Phone Number (Optional):</label>
+                <input type="tel" id="phone" name="phone">
+            </div>
+            <div class="form-group">
+                <label for="skills">Your Skills/Expertise (e.g., Medical, Counseling, Teaching, Logistics, Tech Support):</label>
+                <textarea id="skills" name="skills" rows="3" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="availability">Your Availability (e.g., Weekends, Mon-Fri Afternoons, Flexible):</label>
+                <input type="text" id="availability" name="availability" required>
+            </div>
+            <div class="form-group">
+                <label for="message">Anything else you'd like us to know? (Optional):</label>
+                <textarea id="message" name="message" rows="5"></textarea>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Submit Volunteer Application">
+            </div>
+            <div id="responseMessage" class="response-message" style="display: none;"></div>
+        </form>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 The Broken Weave. All rights reserved.</p>
+    </footer>
+
+    <script>
+        document.getElementById('volunteerForm').addEventListener('submit', async function(event) {
+            event.preventDefault(); // Prevent the default form submission
+
+            const form = event.target;
+            const responseMessage = document.getElementById('responseMessage');
+            responseMessage.style.display = 'none'; // Hide previous messages
+
+            const formData = {
+                name: form.name.value,
+                email: form.email.value,
+                phone: form.phone.value,
+                skills: form.skills.value,
+                availability: form.availability.value,
+                message: form.message.value,
+            };
+
+            try {
+                // Send the data to your backend API
+                const response = await fetch('http://localhost:3000/api/volunteer/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData),
+                });
+
+                const data = await response.json(); // Parse the JSON response from the server
+
+                if (response.ok) { // Check if the HTTP status code is in the 200s
+                    responseMessage.textContent = data.message;
+                    responseMessage.className = 'response-message success';
+                    form.reset(); // Clear the form on successful submission
+                } else {
+                    // Handle server-side errors (e.g., validation errors, email already exists)
+                    responseMessage.textContent = data.message || 'An error occurred during registration.';
+                    responseMessage.className = 'response-message error';
+                }
+            } catch (error) {
+                // Handle network errors (e.g., server is down, no internet)
+                console.error('Network or server error:', error);
+                responseMessage.textContent = 'Could not connect to the server. Please try again later.';
+                responseMessage.className = 'response-message error';
+            } finally {
+                responseMessage.style.display = 'block'; // Show the message
+            }
+        });
+    </script>
+</body>
+</html>

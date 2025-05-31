@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Volunteers - The Broken Weave (Admin)</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Specific styles for the volunteers table */
+        main {
+            padding: 40px 20px;
+            max-width: 1000px; /* Increased max-width for better table display */
+            margin: 40px auto;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center; /* Center content within main */
+        }
+        main h2 {
+            color: #007bff;
+            font-size: 2.5em;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+            text-align: center;
+        }
+        .loading-message, .error-message, .no-volunteers-message {
+            padding: 20px;
+            text-align: center;
+            font-size: 1.1em;
+            color: #666;
+        }
+        .error-message {
+            color: #d9534f; /* Red for errors */
+            background-color: #f2dede;
+            border: 1px solid #ebccd1;
+            border-radius: 5px;
+        }
+
+        .volunteers-table-container {
+            overflow-x: auto; /* Allows horizontal scrolling for wide tables */
+            margin-top: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0 auto; /* Center the table if container allows */
+            min-width: 700px; /* Ensure table is wide enough to prevent squishing */
+        }
+        th, td {
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            text-align: left;
+            vertical-align: top; /* Align text to top for multi-line content */
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            color: #333;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #e9e9e9;
+        }
+        .email-column, .phone-column {
+            white-space: nowrap; /* Prevent email/phone from breaking */
+        }
+        .skills-column, .message-column {
+            max-width: 200px; /* Limit width to keep table manageable */
+            word-wrap: break-word; /* Allow long words to break */
+        }
+        .registered-at-column {
+            white-space: nowrap; /* Keep date/time on one line */
+            font-size: 0.9em;
+        }
+        .hidden {
+            display: none !important; /* Forces element to be hidden */
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>The Broken Weave</h1>
+        <nav>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="register.html">Register</a></li>
+                <li><a href="report-missing.html">Report Missing</a></li>
+                <li><a href="viewMissing.html">View Missing</a></li>
+                <li><a href="login.html">Login</a></li>
+                <li><a href="donate.html">Donate</a></li>
+                <li><a href="howToHelp.html">How to Help</a></li>
+                <li><a href="volunteerRegister.html">Volunteer</a></li>
+                <li id="viewVolunteersNavLink" class="hidden"><a href="viewVolunteers.html">View Volunteers</a></li>
+                <li id="logoutNavLink" class="hidden"><a href="#" id="logoutButton">Logout</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <h2>Registered Volunteers (Admin View)</h2>
+        <div class="loading-message" id="loadingMessage">Loading volunteers...</div>
+        <div class="error-message" id="errorMessage" style="display: none;"></div>
+        <div class="no-volunteers-message" id="noVolunteersMessage" style="display: none;">No volunteers registered yet.</div>
+
+        <div class="volunteers-table-container">
+            <table id="volunteersTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Skills</th>
+                        <th>Availability</th>
+                        <th>Message</th>
+                        <th>Registered At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 The Broken Weave. All rights reserved.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+            const viewVolunteersNavLink = document.getElementById('viewVolunteersNavLink');
+            const logoutNavLink = document.getElementById('logoutNavLink');
+            const logoutButton = document.getElementById('logoutButton');
+            const loginNavLink = document.querySelector('nav ul li a[href="login.html"]').closest('li');
+
+            // --- Admin Check and Page Redirect ---
+            if (!loggedInUser || !loggedInUser.is_admin) {
+                // If not logged in or not an admin, redirect to login page
+                alert('You must be an administrator to view this page.');
+                window.location.href = 'login.html'; // Redirect to login
+                return; // Stop further script execution
+            }
+            // --- END Admin Check ---
+
+            // --- Navigation Bar Visibility Logic ---
+            // Hide the View Volunteers link by default (handled by CSS 'hidden' class)
+            if (viewVolunteersNavLink) {
+                viewVolunteersNavLink.classList.add('hidden'); // Ensure hidden by default
+            }
+            // Hide the Logout link by default (handled by CSS 'hidden' class)
+            if (logoutNavLink) {
+                logoutNavLink.classList.add('hidden'); // Ensure hidden by default
+            }
+
+            // If a user is logged in
+            if (loggedInUser) {
+                // Hide the Login link
+                if (loginNavLink) {
+                    loginNavLink.classList.add('hidden');
+                }
+                // Show the Logout link
+                if (logoutNavLink) {
+                    logoutNavLink.classList.remove('hidden');
+                }
+
+                // If the logged-in user is an admin, show the View Volunteers link
+                if (loggedInUser.is_admin) {
+                    if (viewVolunteersNavLink) {
+                        viewVolunteersNavLink.classList.remove('hidden');
+                    }
+                }
+            } else {
+                // If no user is logged in, ensure Login link is visible (default)
+                if (loginNavLink) {
+                    loginNavLink.classList.remove('hidden');
+                }
+            }
+            // --- END Navigation Bar Visibility Logic ---
+
+            // Add event listener for logout button
+            if (logoutButton) {
+                logoutButton.addEventListener('click', (e) => {
+                    e.preventDefault(); // Prevent default link behavior
+                    localStorage.removeItem('loggedInUser'); // Clear user from localStorage
+                    window.location.href = 'index.html'; // Redirect to home or login page
+                });
+            }
+
+            // Fetch volunteers only if admin check passed (already handled by 'return' above)
+            fetchVolunteers();
+        });
+
+        async function fetchVolunteers() {
+            const loadingMessage = document.getElementById('loadingMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            const noVolunteersMessage = document.getElementById('noVolunteersMessage');
+            const volunteersTable = document.getElementById('volunteersTable');
+            const tableBody = volunteersTable.querySelector('tbody');
+
+            loadingMessage.style.display = 'block';
+            errorMessage.style.display = 'none';
+            noVolunteersMessage.style.display = 'none';
+            volunteersTable.style.display = 'none';
+            tableBody.innerHTML = ''; // Clear previous data
+
+            try {
+                // Send the X-User-Is-Admin header with the request
+                const response = await fetch('http://localhost:3000/api/volunteers', {
+                    headers: {
+                        'X-User-Is-Admin': 'true' // This tells the backend you're an admin
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json(); // Try to get error message from backend
+                    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+                }
+                const volunteers = await response.json();
+
+                if (volunteers.length === 0) {
+                    noVolunteersMessage.style.display = 'block';
+                } else {
+                    volunteers.forEach(volunteer => {
+                        const row = tableBody.insertRow();
+                        row.innerHTML = `
+                            <td>${volunteer.id}</td>
+                            <td>${volunteer.name}</td>
+                            <td class="email-column">${volunteer.email}</td>
+                            <td class="phone-column">${volunteer.phone || 'N/A'}</td>
+                            <td class="skills-column">${volunteer.skills}</td>
+                            <td>${volunteer.availability}</td>
+                            <td class="message-column">${volunteer.message || 'N/A'}</td>
+                            <td class="registered-at-column">${new Date(volunteer.registered_at).toLocaleString()}</td>
+                        `;
+                    });
+                    volunteersTable.style.display = 'table';
+                }
+            } catch (error) {
+                console.error('Error fetching volunteers:', error);
+                errorMessage.textContent = `Failed to load volunteers: ${error.message}. Please ensure the backend server is running and you are logged in as an admin.`;
+                errorMessage.style.display = 'block';
+            } finally {
+                loadingMessage.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

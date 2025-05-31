@@ -1,0 +1,172 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+header {
+    background-color: #333;
+    color: #fff;
+    padding: 1rem 0;
+    text-align: center;
+}
+
+header h1 {
+    margin: 0;
+}
+
+nav ul {
+    list-style: none;
+    padding: 0;
+}
+
+nav ul li {
+    display: inline;
+    margin: 0 15px;
+}
+
+nav ul li a {
+    color: #fff;
+    text-decoration: none;
+}
+
+main {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 20px auto;
+    background-color: #fff;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+#hero {
+    text-align: center;
+    padding: 50px 0;
+    background-color: #e0f7fa;
+    margin-bottom: 20px;
+}
+
+#hero p {
+    font-size: 1.2em;
+    margin-bottom: 20px;
+}
+
+button {
+    background-color: #007bff;
+    color: #fff;
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+    font-size: 1em;
+    border-radius: 5px;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+#search, #features {
+    margin-bottom: 30px;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+#search input {
+    width: 70%;
+    padding: 10px;
+    margin-right: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+footer {
+    text-align: center;
+    padding: 20px;
+    background-color: #333;
+    color: #fff;
+    position: relative;
+    bottom: 0;
+    width: 100%;
+}
+/* --- Styling for Success Stories Section --- */
+.success-stories-section {
+    padding: 50px 20px;
+    background-color: #e9ecef; /* Light gray background */
+    text-align: center;
+    border-top: 1px solid #dee2e6;
+}
+
+.success-stories-section h2 {
+    font-size: 2.8em;
+    color: #343a40;
+    margin-bottom: 40px;
+    position: relative;
+    display: inline-block; /* To allow underline effect */
+}
+
+.success-stories-section h2::after {
+    content: '';
+    position: absolute;
+    width: 60%;
+    height: 4px;
+    background-color: #007bff;
+    left: 20%;
+    bottom: -10px;
+    border-radius: 2px;
+}
+
+.stories-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Responsive grid */
+    gap: 30px; /* Space between cards */
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.story-card {
+    background-color: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    padding: 25px;
+    text-align: left;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-left: 5px solid #28a745; /* Green accent border */
+}
+
+.story-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.story-card h3 {
+    color: #28a745; /* Green heading */
+    font-size: 1.8em;
+    margin-bottom: 10px;
+}
+
+.story-card p {
+    color: #555;
+    font-size: 1em;
+    line-height: 1.7;
+    margin-bottom: 10px;
+}
+
+.story-card .story-date {
+    font-size: 0.9em;
+    color: #888;
+    font-style: italic;
+    text-align: right;
+    margin-top: 15px;
+}
+
+.stories-container .no-stories,
+.stories-container .loading-message {
+    grid-column: 1 / -1; /* Make it span all columns */
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    padding: 40px;
+    font-size: 1.2em;
+}

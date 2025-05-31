@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us - Broken Weave</title>
+    <link rel="stylesheet" href="styles.css"> <style>
+        /* Basic styling for the contact page, you can integrate this into your styles.css */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #e0f2f7; /* Light blue background similar to the image */
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        h1 {
+            color: #1a73e8; /* Blue similar to the "Ready to Make an Impact?" text */
+            margin-bottom: 20px;
+        }
+
+        p {
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+
+        .contact-info {
+            margin-top: 30px;
+            text-align: left;
+            display: inline-block; /* To center the block */
+        }
+
+        .contact-info div {
+            margin-bottom: 15px;
+        }
+
+        .contact-info label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+            color: #1a73e8;
+        }
+
+        .contact-info a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        .contact-info a:hover {
+            text-decoration: underline;
+        }
+
+        .form-section {
+            margin-top: 40px;
+            text-align: left;
+        }
+
+        .form-section h2 {
+            color: #1a73e8;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .contact-form label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .contact-form input[type="text"],
+        .contact-form input[type="email"],
+        .contact-form textarea {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .contact-form textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .contact-form button {
+            background-color: #1a73e8; /* Blue submit button */
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background-color 0.3s ease;
+        }
+
+        .contact-form button:hover {
+            background-color: #145cb3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Contact Us</h1>
+        <p>We're here to help and answer any question you might have. We look forward to hearing from you.</p>
+
+        <div class="contact-info">
+            <div>
+                <label>Email:</label>
+                <p><a href="mailto:help@brokenweave.org">help@brokenweave.org</a></p>
+            </div>
+            <div>
+                <label>Phone:</label>
+                <p>+1 (555) 123-4567</p> </div>
+            <div>
+                <label>Address:</label>
+                <p>123 Main Street, Anytown, USA 12345</p> </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Send us a Message</h2>
+            <form class="contact-form" action="/submit-contact" method="POST">
+                <label for="name">Your Name:</label>
+                <input type="text" id="name" name="name" required>
+
+                <label for="email">Your Email:</label>
+                <input type="email" id="email" name="email" required>
+
+                <label for="subject">Subject:</label>
+                <input type="text" id="subject" name="subject">
+
+                <label for="message">Your Message:</label>
+                <textarea id="message" name="message" required></textarea>
+
+                <button type="submit">Send Message</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

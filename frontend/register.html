@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - The Broken Weave</title>
+    <link rel="stylesheet" href="style.css"> <style>
+        /* Specific styling for the registration form container */
+        .register-container {
+            max-width: 450px; /* Slightly wider than login for more info */
+            margin: 50px auto;
+            padding: 30px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1); /* Slightly stronger shadow */
+            background-color: #fff;
+            text-align: center;
+            animation: fadeIn 1s ease-in-out; /* Simple fade-in animation */
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .register-container h2 {
+            margin-bottom: 25px; /* More space below heading */
+            color: #2c3e50; /* A darker, more professional color */
+            font-size: 2em;
+        }
+
+        .register-form label {
+            display: block;
+            text-align: left;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .register-form input[type="text"],
+        .register-form input[type="email"],
+        .register-form input[type="password"] {
+            width: calc(100% - 22px);
+            padding: 12px; /* Slightly larger padding for better aesthetics */
+            margin-bottom: 20px;
+            border: 1px solid #a4b0be; /* Softer border color */
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 1em;
+        }
+
+        .register-form input[type="text"]:focus,
+        .register-form input[type="email"]:focus,
+        .register-form input[type="password"]:focus {
+            border-color: #007bff; /* Highlight on focus */
+            outline: none;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+        }
+
+        .register-form button {
+            width: 100%;
+            padding: 12px;
+            background-color: #28a745; /* A success-oriented green color */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: background-color 0.3s ease; /* Smooth transition on hover */
+        }
+
+        .register-form button:hover {
+            background-color: #218838; /* Darker green on hover */
+        }
+
+        .message {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        .message.success {
+            color: #28a745; /* Green for success messages */
+        }
+
+        .message.error {
+            color: #dc3545; /* Red for error messages */
+        }
+
+        .toggle-link {
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+
+        .toggle-link a {
+            color: #007bff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .toggle-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <h2>Register for The Broken Weave</h2>
+        <form class="register-form" id="registerForm">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" required>
+
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+
+            <label for="confirmPassword">Confirm Password:</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" required>
+
+            <button type="submit">Register</button>
+            <p class="message" id="registerMessage"></p>
+        </form>
+        <div class="toggle-link">
+            Already have an account? <a href="login.html">Login here</a>
+        </div>
+    </div>
+
+    <script src="register.js"></script>
+</body>
+</html>

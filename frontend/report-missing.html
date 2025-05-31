@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Missing Person - The Broken Weave</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Specific styling for the report form */
+        .report-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 30px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+            text-align: center;
+        }
+
+        .report-container h2 {
+            margin-bottom: 25px;
+            color: #333;
+            font-size: 2em;
+        }
+
+        .report-form label {
+            display: block;
+            text-align: left;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .report-form input[type="text"],
+        .report-form input[type="date"],
+        .report-form select,
+        .report-form textarea,
+        .report-form input[type="file"] { /* Added input[type="file"] */
+            width: calc(100% - 22px); /* Adjusts width to account for padding and border */
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Ensures padding and border are included in the width */
+            font-size: 1em;
+        }
+        
+        .report-form textarea {
+            resize: vertical; /* Allow vertical resizing */
+            min-height: 80px;
+        }
+
+        .report-form button {
+            width: 100%;
+            padding: 12px;
+            background-color: #28a745; /* Green for submit button */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.2em;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+
+        .report-form button:hover {
+            background-color: #218838;
+        }
+
+        .message {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .message.success {
+            color: green;
+            background-color: #e6ffe6;
+            border: 1px solid green;
+        }
+        .message.error {
+            color: red;
+            background-color: #ffe6e6;
+            border: 1px solid red;
+        }
+        /* Style for hidden items (from index.html, needed for nav) */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>The Broken Weave</h1>
+        <nav id="mainNav">
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="register.html">Register</a></li>
+                <li><a href="reportMissing.html">Report Missing</a></li>
+                <li><a href="viewMissing.html">View Missing</a></li>
+                <li><a href="login.html">Login</a></li>
+                <li><a href="donate.html">Donate</a></li>
+                <li><a href="howToHelp.html">How to Help</a></li>
+                <li><a href="volunteerRegister.html">Volunteer</a></li>
+                <li id="viewVolunteersNavLink"><a href="viewVolunteers.html">View Volunteers</a></li>
+                <li id="logoutNavLink" class="hidden"><a href="#" id="logoutButton">Logout</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <div class="report-container">
+            <h2>Report a Missing Person</h2>
+            <form class="report-form" id="reportForm" enctype="multipart/form-data"> <label for="name">Full Name of Missing Person:</label>
+                <input type="text" id="name" name="name" required>
+
+                <label for="dob">Date of Birth (Optional):</label>
+                <input type="date" id="dob" name="dob">
+
+                <label for="category">Category:</label>
+                <select id="category" name="category" required>
+                    <option value="">-- Select Category --</option>
+                    <option value="child">Child</option>
+                    <option value="woman">Woman</option>
+                    <option value="senior citizen">Senior Citizen</option>
+                    <option value="other">Other</option>
+                </select>
+
+                <label for="last_known_location">Last Known Location:</label>
+                <input type="text" id="last_known_location" name="last_known_location" required>
+
+                <label for="contact_info">Your Contact Information (Email/Phone):</label>
+                <input type="text" id="contact_info" name="contact_info" required>
+
+                <label for="description">Description (e.g., appearance, last seen clothes):</label>
+                <textarea id="description" name="description" rows="5"></textarea>
+
+                <label for="personImage">Upload Photo (Optional):</label>
+                <input type="file" id="personImage" name="image" accept="image/*"> <button type="submit">Submit Report</button>
+                <p class="message" id="reportMessage"></p>
+            </form>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 The Broken Weave. All rights reserved.</p>
+    </footer>
+
+    <script>
+        // NEW SCRIPT: For handling navigation visibility based on login/admin status
+        document.addEventListener('DOMContentLoaded', () => {
+            const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+            const viewVolunteersNavLink = document.getElementById('viewVolunteersNavLink');
+            const logoutNavLink = document.getElementById('logoutNavLink');
+            const logoutButton = document.getElementById('logoutButton');
+            const loginNavLink = document.querySelector('nav ul li a[href="login.html"]').closest('li'); // Find login link's parent li
+
+            // Hide the View Volunteers link by default
+            if (viewVolunteersNavLink) {
+                viewVolunteersNavLink.classList.add('hidden');
+            }
+            // Hide the Logout link by default
+            if (logoutNavLink) {
+                logoutNavLink.classList.add('hidden');
+            }
+
+            // If a user is logged in
+            if (loggedInUser) {
+                // Hide the Login link
+                if (loginNavLink) {
+                    loginNavLink.classList.add('hidden');
+                }
+                // Show the Logout link
+                if (logoutNavLink) {
+                    logoutNavLink.classList.remove('hidden');
+                }
+
+                // If the logged-in user is an admin, show the View Volunteers link
+                if (loggedInUser.is_admin) {
+                    if (viewVolunteersNavLink) {
+                        viewVolunteersNavLink.classList.remove('hidden');
+                    }
+                }
+            } else {
+                // If no user is logged in, ensure Login link is visible (default)
+                if (loginNavLink) {
+                    loginNavLink.classList.remove('hidden');
+                }
+            }
+
+            // Add event listener for logout
+            if (logoutButton) {
+                logoutButton.addEventListener('click', (e) => {
+                    e.preventDefault(); // Prevent default link behavior
+                    localStorage.removeItem('loggedInUser'); // Clear user from localStorage
+                    window.location.href = 'index.html'; // Redirect to home or login page
+                });
+            }
+        });
+
+        // --- UPDATED SCRIPT: Handling form submission with file upload ---
+        document.getElementById('reportForm').addEventListener('submit', async function(event) {
+            event.preventDefault(); // Prevent default form submission
+
+            const form = event.target;
+            const messageDiv = document.getElementById('reportMessage');
+            messageDiv.textContent = ''; // Clear previous messages
+            messageDiv.className = 'message'; // Reset class
+
+            // Create a FormData object from the form
+            // FormData automatically handles 'multipart/form-data' encoding
+            // and includes file inputs.
+            const formData = new FormData(form); 
+
+            try {
+                const response = await fetch('http://localhost:3000/api/missing-persons', {
+                    method: 'POST',
+                    // IMPORTANT: Do NOT set 'Content-Type': 'application/json' when using FormData
+                    // The browser sets the correct 'multipart/form-data' header automatically.
+                    body: formData // Send the FormData object directly
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    messageDiv.textContent = data.message + (data.imageUrl ? ` Image uploaded to: ${data.imageUrl}` : '');
+                    messageDiv.classList.add('success');
+                    form.reset(); // Clear the form after successful submission
+                } else {
+                    messageDiv.textContent = data.message || 'Failed to report missing person.';
+                    messageDiv.classList.add('error');
+                }
+            } catch (error) {
+                console.error('Error reporting missing person:', error);
+                messageDiv.textContent = 'Could not connect to server or a network error occurred.';
+                messageDiv.classList.add('error');
+            }
+        });
+    </script>
+</body>
+</html>
