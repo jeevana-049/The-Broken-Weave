@@ -3,7 +3,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
     // Define your backend base URL for API calls.
     // Ensure '5500' matches the port your server.js is listening on.
-    const BASE_URL = 'http://localhost:3000'; // <--- VERIFIED: This is correct now!
+    const BASE_URL = window.location.origin; // <--- VERIFIED: This is correct now!
 
     // --- Search Functionality ---
     const searchForm = document.getElementById('searchForm');
