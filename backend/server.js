@@ -1,10 +1,9 @@
+require('dotenv').config(); // Load environment variables from .env file
+
 const express = require('express');
-const mysql = require('mysql2/promise'); // Using mysql2 with promise support
+const { Pool } = require('pg'); // Use pg for PostgreSQL
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-// const path = require('path'); // Not needed for Vercel functions directly serving API
-// const multer = require('multer'); // Removed for Vercel serverless deployment (no file storage)
-// const fs = require('fs/promises'); // Removed for Vercel serverless deployment
 
 const app = express();
 
@@ -18,31 +17,26 @@ let pool; // Declare pool outside the function to reuse connection across invoca
 async function getDbConnection() {
     if (!pool) {
         try {
-            // Ensure environment variables are set before creating the pool
-            if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_DATABASE) {
-                throw new Error('Database environment variables are not set. Please configure DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE.');
+            // Ensure DATABASE_URL environment variable is set
+            if (!process.env.DATABASE_URL) {
+                throw new Error('DATABASE_URL environment variable is not set. Please configure it.');
             }
 
-            pool = mysql.createPool({
-                host: process.env.DB_HOST,
-                user: process.env.DB_USER,
-                password: process.env.DB_PASSWORD,
-                database: process.env.DB_DATABASE,
-                waitForConnections: true,
-                connectionLimit: 10, // Max number of connections in the pool
-                queueLimit: 0,       // No limit on connection queue
-                // Recommended for serverless to keep connections alive
-                keepAliveInitialDelay: 10000, // 10 seconds
-                enableKeepAlive: true
+            pool = new Pool({
+                connectionString: process.env.DATABASE_URL,
+                ssl: {
+                    rejectUnauthorized: false // Required for connecting to Neon from Vercel's serverless functions for free tier
+                }
             });
-            console.log('Database pool created successfully.');
+
+            console.log('PostgreSQL Database pool created successfully.');
 
             // Optional: Test connection immediately after pool creation
-            const connection = await pool.getConnection();
-            console.log('Successfully connected to MySQL database via pool!');
-            connection.release(); // Release the connection back to the pool
+            const client = await pool.connect(); // Get a client from the pool
+            console.log('Successfully connected to PostgreSQL database via pool!');
+            client.release(); // Release the client back to the pool
         } catch (err) {
-            console.error('Failed to initialize MySQL database pool:', err);
+            console.error('Failed to initialize PostgreSQL database pool:', err);
             // Re-throw the error to ensure Vercel deployment fails if DB connection is bad
             throw err;
         }
@@ -50,7 +44,7 @@ async function getDbConnection() {
     return pool;
 }
 
-// --- Middleware for Admin Protection (from your code) ---
+// --- Middleware for Admin Protection ---
 const isAdmin = (req, res, next) => {
     // This checks for a custom header 'x-user-is-admin' set to 'true'
     // In a real application, you'd verify a JWT token or session.
@@ -88,12 +82,10 @@ app.post('/api/register', async (req, res) => {
     try {
         const pool = await getDbConnection(); // Get the connection pool
         // Check if username or email already exists
-        const [existingUsers] = await pool.execute(
-            'SELECT id FROM users WHERE username = ? OR email = ?',
-            [username, email]
-        );
+        const existingUsersQuery = 'SELECT id FROM users WHERE username = $1 OR email = $2'; // Use $1, $2
+        const existingUsersResult = await pool.query(existingUsersQuery, [username, email]);
 
-        if (existingUsers.length > 0) {
+        if (existingUsersResult.rows.length > 0) { // Access results.rows
             return res.status(409).json({ message: 'Username or Email already exists.' });
         }
 
@@ -102,15 +94,19 @@ app.post('/api/register', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         // Insert new user into the database
-        const [result] = await pool.execute(
-            'INSERT INTO users (username, password, email, is_admin) VALUES (?, ?, ?, 0)',
-            [username, hashedPassword, email]
-        );
+        // Use RETURNING id to get the newly inserted ID in PostgreSQL
+        const insertUserQuery = 'INSERT INTO users (username, password, email, is_admin) VALUES ($1, $2, $3, 0) RETURNING id';
+        const insertUserResult = await pool.query(insertUserQuery, [username, hashedPassword, email]);
 
-        res.status(201).json({ message: 'User registered successfully!', userId: result.insertId });
+        // Access the inserted ID from results.rows[0].id
+        res.status(201).json({ message: 'User registered successfully!', userId: insertUserResult.rows[0].id });
 
     } catch (error) {
         console.error('Error during registration:', error);
+        // Specific error code for unique constraint violation in PostgreSQL
+        if (error.code === '23505') {
+            return res.status(409).json({ message: 'Username or Email already exists.' });
+        }
         res.status(500).json({ message: 'Server error during registration.', error: error.message });
     }
 });
@@ -127,16 +123,14 @@ app.post('/api/login', async (req, res) => {
     try {
         const pool = await getDbConnection(); // Get the connection pool
         // Retrieve user by username
-        const [users] = await pool.execute(
-            'SELECT id, username, password, is_admin FROM users WHERE username = ?',
-            [username]
-        );
+        const selectUserQuery = 'SELECT id, username, password, is_admin FROM users WHERE username = $1'; // Use $1
+        const usersResult = await pool.query(selectUserQuery, [username]);
 
-        if (users.length === 0) {
+        if (usersResult.rows.length === 0) { // Access results.rows
             return res.status(401).json({ message: 'Invalid username or password.' });
         }
 
-        const user = users[0];
+        const user = usersResult.rows[0]; // Access results.rows[0]
         const hashedPassword = user.password;
 
         // Compare provided password with hashed password
@@ -162,7 +156,6 @@ app.post('/api/login', async (req, res) => {
 });
 
 // 3. Report Missing Person Route (Image Uploads Disabled for Vercel)
-// Removed `upload.single('image')` middleware as file uploads are not supported directly on Vercel functions
 app.post('/api/missing-persons', async (req, res) => {
     const { name, dob, category, last_known_location, contact_info, description } = req.body;
     const imageUrl = null; // Image uploads are disabled for Vercel deployment
@@ -175,11 +168,11 @@ app.post('/api/missing-persons', async (req, res) => {
         const pool = await getDbConnection(); // Get the connection pool
         const query = `
             INSERT INTO MISSING_PERSONS (name, dob, category, last_known_location, contact_info, description, image_url, reported_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
-        `;
-        const [result] = await pool.execute(query, [name, dob || null, category, last_known_location, contact_info, description || null, imageUrl]);
+            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id
+        `; // Use $1-$7 and RETURNING id
+        const result = await pool.query(query, [name, dob || null, category, last_known_location, contact_info, description || null, imageUrl]);
 
-        res.status(201).json({ message: 'Missing person reported successfully!', id: result.insertId, imageUrl: imageUrl });
+        res.status(201).json({ message: 'Missing person reported successfully!', id: result.rows[0].id, imageUrl: imageUrl }); // Access id from rows[0].id
     } catch (error) {
         console.error('Error reporting missing person:', error);
         res.status(500).json({ message: 'Server error reporting missing person.', error: error.message });
@@ -191,9 +184,10 @@ app.get('/api/missing-persons', async (req, res) => {
     try {
         const pool = await getDbConnection();
         // Fetches all missing persons, formatted date for readability
-        const sql = 'SELECT id, name, dob, category, last_known_location, contact_info, description, image_url, status, DATE_FORMAT(reported_at, "%Y-%m-%d %H:%i:%s") AS reported_at_formatted FROM MISSING_PERSONS ORDER BY reported_at DESC';
-        const [rows] = await pool.execute(sql);
-        res.status(200).json(rows);
+        // Use TO_CHAR for date formatting in PostgreSQL
+        const sql = 'SELECT id, name, dob, category, last_known_location, contact_info, description, image_url, status, TO_CHAR(reported_at, \'YYYY-MM-DD HH24:MI:SS\') AS reported_at_formatted FROM MISSING_PERSONS ORDER BY reported_at DESC';
+        const result = await pool.query(sql); // Use pool.query
+        res.status(200).json(result.rows); // Access results.rows
     } catch (error) {
         console.error('Error fetching missing persons:', error);
         res.status(500).json({ message: 'Error fetching missing persons', error: error.message });
@@ -210,20 +204,20 @@ app.get('/api/missing-persons/search', async (req, res) => {
         let sql = `
             SELECT id, name, dob, last_known_location, contact_info, description, reported_at, category, status, image_url
             FROM MISSING_PERSONS
-            WHERE (name LIKE ? OR description LIKE ? OR last_known_location LIKE ?)
-        `;
+            WHERE (name ILIKE $1 OR description ILIKE $2 OR last_known_location ILIKE $3)
+        `; // Use ILIKE for case-insensitive search and $1, $2, $3
         const params = [`%${queryTerm}%`, `%${queryTerm}%`, `%${queryTerm}%`]; // Parameters for LIKE queries
 
         // Add category filter if provided and not 'all'
         if (categoryFilter && categoryFilter !== 'all') {
-            sql += ` AND category = ?`;
+            sql += ` AND category = $4`; // Use $4 for new parameter
             params.push(categoryFilter);
         }
 
         sql += ` ORDER BY reported_at DESC`; // Order by most recently reported
 
-        const [rows] = await pool.execute(sql, params);
-        res.status(200).json({ results: rows });
+        const result = await pool.query(sql, params); // Use pool.query
+        res.status(200).json({ results: result.rows }); // Access results.rows
     } catch (error) {
         console.error('Error during search:', error);
         res.status(500).json({ message: 'Server error during search.', error: error.message });
@@ -239,10 +233,10 @@ app.get('/api/success-stories', async (req, res) => {
             FROM MISSING_PERSONS
             WHERE status = 'found'
             ORDER BY reported_at DESC
-            LIMIT 5; -- Limits to the 5 most recent success stories
+            LIMIT 5;
         `;
-        const [stories] = await pool.execute(query);
-        res.status(200).json({ stories: stories });
+        const result = await pool.query(query); // Use pool.query
+        res.status(200).json({ stories: result.rows }); // Access results.rows
     } catch (error) {
         console.error('Error fetching success stories:', error);
         res.status(500).json({ message: 'Server error while fetching stories.', error: error.message });
@@ -254,9 +248,8 @@ app.get('/api/volunteers', isAdmin, async (req, res) => {
     try {
         const pool = await getDbConnection();
         const query = `SELECT id, name, email, phone, skills, availability, message, registered_at FROM VOLUNTEERS ORDER BY registered_at DESC`;
-        const [volunteers] = await pool.execute(query);
-
-        res.status(200).json(volunteers);
+        const result = await pool.query(query); // Use pool.query
+        res.status(200).json(result.rows); // Access results.rows
     } catch (error) {
         console.error('Error fetching volunteers:', error);
         res.status(500).json({ message: 'Server error fetching volunteers.', error: error.message });
@@ -269,12 +262,10 @@ app.patch('/api/missing-persons/:id/found', isAdmin, async (req, res) => {
 
     try {
         const pool = await getDbConnection();
-        const [result] = await pool.execute(
-            'UPDATE MISSING_PERSONS SET status = ? WHERE id = ?',
-            ['found', personId]
-        );
+        const updateQuery = 'UPDATE MISSING_PERSONS SET status = $1 WHERE id = $2'; // Use $1, $2
+        const result = await pool.query(updateQuery, ['found', personId]); // Use pool.query
 
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) { // Check rowCount for affected rows
             return res.status(404).json({ message: 'Missing person not found.' });
         }
 
@@ -287,15 +278,11 @@ app.patch('/api/missing-persons/:id/found', isAdmin, async (req, res) => {
 });
 
 // API Endpoint to Update Missing Person's Photo (Admin Protected) - Image upload disabled for Vercel
-// Removed `upload.single('image')` middleware.
 app.patch('/api/missing-persons/:id/image', isAdmin, async (req, res) => {
     const personId = req.params.id;
-    // Image uploads are disabled, so we'll just acknowledge the attempt but won't process a new image file.
-    // In a full solution, you'd use a cloud storage service like Cloudinary or AWS S3 here.
     console.warn('Image upload functionality is disabled for Vercel serverless functions.');
     return res.status(501).json({ message: 'Image upload is temporarily disabled. Please contact support.' }); // 501 Not Implemented
 });
-
 
 // NEW: API Endpoint to Update ALL Missing Person Details (Admin Protected)
 app.patch('/api/missing-persons/:id', isAdmin, async (req, res) => {
@@ -308,14 +295,14 @@ app.patch('/api/missing-persons/:id', isAdmin, async (req, res) => {
 
     try {
         const pool = await getDbConnection();
-        const [result] = await pool.execute(
-            `UPDATE MISSING_PERSONS
-             SET name = ?, dob = ?, category = ?, last_known_location = ?, contact_info = ?, description = ?
-             WHERE id = ?`,
-            [name, dob || null, category, last_known_location, contact_info, description || null, personId]
-        );
+        const updateQuery = `
+            UPDATE MISSING_PERSONS
+            SET name = $1, dob = $2, category = $3, last_known_location = $4, contact_info = $5, description = $6
+            WHERE id = $7
+        `; // Use $1-$7
+        const result = await pool.query(updateQuery, [name, dob || null, category, last_known_location, contact_info, description || null, personId]); // Use pool.query
 
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) { // Check rowCount
             return res.status(404).json({ message: 'Missing person not found or no changes made.' });
         }
 
@@ -327,52 +314,51 @@ app.patch('/api/missing-persons/:id', isAdmin, async (req, res) => {
     }
 });
 
-
-// NEW: API Endpoint to Delete Missing Person (Admin Protected) - Image deletion disabled for Vercel
+// NEW: API Endpoint to Delete Missing Person (Admin Protected)
 app.delete('/api/missing-persons/:id', isAdmin, async (req, res) => {
     const personId = req.params.id;
-    let connection; // Declare connection for finally block
+    let client; // Declare client for finally block for transactions
 
     try {
-        connection = await getDbConnection(); // Use getDbConnection to get pool, then connection
-        // Start a transaction (good practice)
-        await connection.beginTransaction();
+        const pool = await getDbConnection(); // Get the connection pool
+        client = await pool.connect(); // Get a client for transaction
+        await client.query('BEGIN'); // Start a transaction
 
-        // 1. Get the image URL (but we won't delete the file on Vercel)
-        const [persons] = await connection.execute('SELECT image_url FROM MISSING_PERSONS WHERE id = ?', [personId]);
+        // 1. Get the image URL (if needed, but we won't delete the file on Vercel)
+        const selectQuery = 'SELECT image_url FROM MISSING_PERSONS WHERE id = $1'; // Use $1
+        const personsResult = await client.query(selectQuery, [personId]); // Use client.query
 
-        if (persons.length === 0) {
-            await connection.rollback();
+        if (personsResult.rows.length === 0) { // Access rows.length
+            await client.query('ROLLBACK');
             return res.status(404).json({ message: 'Missing person not found.' });
         }
 
         // 2. Delete the record from the database
-        const [deleteResult] = await connection.execute('DELETE FROM MISSING_PERSONS WHERE id = ?', [personId]);
+        const deleteQuery = 'DELETE FROM MISSING_PERSONS WHERE id = $1'; // Use $1
+        const deleteResult = await client.query(deleteQuery, [personId]); // Use client.query
 
-        if (deleteResult.affectedRows === 0) {
-            await connection.rollback();
+        if (deleteResult.rowCount === 0) { // Check rowCount
+            await client.query('ROLLBACK');
             return res.status(404).json({ message: 'Missing person not found or already deleted.' });
         }
 
-        // Image file deletion logic removed for Vercel serverless functions
         console.warn('Image file deletion functionality is disabled for Vercel serverless functions.');
 
-        await connection.commit();
+        await client.query('COMMIT'); // Commit the transaction
         res.status(200).json({ message: `Missing person ID ${personId} deleted successfully (image file not deleted from server).` });
 
     } catch (error) {
-        if (connection) {
-            await connection.rollback();
+        if (client) { // Check if client was successfully obtained
+            await client.query('ROLLBACK'); // Rollback on error
         }
         console.error('Error deleting missing person:', error);
         res.status(500).json({ message: 'Server error deleting missing person.', error: error.message });
     } finally {
-        if (connection) {
-            connection.release();
+        if (client) {
+            client.release(); // Always release the client back to the pool
         }
     }
 });
-
 
 // API Endpoint for Volunteer Registration
 app.post('/api/volunteer/register', async (req, res) => {
@@ -386,11 +372,11 @@ app.post('/api/volunteer/register', async (req, res) => {
         const pool = await getDbConnection();
         const query = `
             INSERT INTO VOLUNTEERS (name, email, phone, skills, availability, message)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `;
-        const [result] = await pool.execute(query, [name, email, phone || null, skills, availability, message || null]);
+            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id
+        `; // Use $1-$6 and RETURNING id
+        const result = await pool.query(query, [name, email, phone || null, skills, availability, message || null]); // Use pool.query
 
-        res.status(201).json({ message: 'Volunteer registered successfully!', volunteerId: result.insertId });
+        res.status(201).json({ message: 'Volunteer registered successfully!', volunteerId: result.rows[0].id }); // Access id from rows[0].id
 
     } catch (error) {
         console.error('Error during volunteer registration:', error);
@@ -399,5 +385,4 @@ app.post('/api/volunteer/register', async (req, res) => {
 });
 
 // --- FINAL EXPORT FOR VERCEL ---
-// This line replaces app.listen() and is crucial for Vercel to recognize your Express app
 module.exports = app;
