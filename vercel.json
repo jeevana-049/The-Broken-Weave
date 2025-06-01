@@ -14,8 +14,12 @@
     {
       "src": "/api/(.*)",
       "dest": "backend/server.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/$1"
     }
   ],
-  "installCommand": "npm install --prefix backend",
-  "buildCommand": ""
+  "installCommand": "npm install && npm install --prefix backend && npm install --prefix frontend",
+  "buildCommand": "npm run build --prefix frontend"
 }
