@@ -25,7 +25,7 @@ async function getDbConnection() {
             pool = new Pool({
                 connectionString: process.env.DATABASE_URL,
                 ssl: {
-                    rejectUnauthorized: false // Required for connecting to Neon from Vercel's serverless functions for free tier
+                    rejectUnauthorized: false // Required for connecting to Supabase (or Neon) from Vercel's serverless functions for free tier
                 }
             });
 
@@ -82,7 +82,7 @@ app.post('/api/register', async (req, res) => {
     try {
         const pool = await getDbConnection(); // Get the connection pool
         // Check if username or email already exists
-        const existingUsersQuery = 'SELECT id FROM users WHERE username = $1 OR email = $2'; // Use $1, $2
+        const existingUsersQuery = 'SELECT id FROM users WHERE username = $1 OR email = $2'; // Using lowercase 'users'
         const existingUsersResult = await pool.query(existingUsersQuery, [username, email]);
 
         if (existingUsersResult.rows.length > 0) { // Access results.rows
@@ -95,7 +95,8 @@ app.post('/api/register', async (req, res) => {
 
         // Insert new user into the database
         // Use RETURNING id to get the newly inserted ID in PostgreSQL
-        const insertUserQuery = 'INSERT INTO users (username, password, email, is_admin) VALUES ($1, $2, $3, 0) RETURNING id';
+        // Use 'FALSE' for boolean type instead of '0' for better PostgreSQL compatibility
+        const insertUserQuery = 'INSERT INTO users (username, password, email, is_admin) VALUES ($1, $2, $3, FALSE) RETURNING id'; // Using lowercase 'users'
         const insertUserResult = await pool.query(insertUserQuery, [username, hashedPassword, email]);
 
         // Access the inserted ID from results.rows[0].id
@@ -103,7 +104,7 @@ app.post('/api/register', async (req, res) => {
 
     } catch (error) {
         console.error('Error during registration:', error);
-        // Specific error code for unique constraint violation in PostgreSQL
+        // Specific error code for unique constraint violation in PostgreSQL (23505)
         if (error.code === '23505') {
             return res.status(409).json({ message: 'Username or Email already exists.' });
         }
@@ -123,7 +124,7 @@ app.post('/api/login', async (req, res) => {
     try {
         const pool = await getDbConnection(); // Get the connection pool
         // Retrieve user by username
-        const selectUserQuery = 'SELECT id, username, password, is_admin FROM users WHERE username = $1'; // Use $1
+        const selectUserQuery = 'SELECT id, username, password, is_admin FROM users WHERE username = $1'; // Using lowercase 'users'
         const usersResult = await pool.query(selectUserQuery, [username]);
 
         if (usersResult.rows.length === 0) { // Access results.rows
@@ -167,9 +168,9 @@ app.post('/api/missing-persons', async (req, res) => {
     try {
         const pool = await getDbConnection(); // Get the connection pool
         const query = `
-            INSERT INTO MISSING_PERSONS (name, dob, category, last_known_location, contact_info, description, image_url, reported_at)
+            INSERT INTO missing_persons (name, dob, category, last_known_location, contact_info, description, image_url, reported_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id
-        `; // Use $1-$7 and RETURNING id
+        `; // Using lowercase 'missing_persons'
         const result = await pool.query(query, [name, dob || null, category, last_known_location, contact_info, description || null, imageUrl]);
 
         res.status(201).json({ message: 'Missing person reported successfully!', id: result.rows[0].id, imageUrl: imageUrl }); // Access id from rows[0].id
@@ -185,7 +186,7 @@ app.get('/api/missing-persons', async (req, res) => {
         const pool = await getDbConnection();
         // Fetches all missing persons, formatted date for readability
         // Use TO_CHAR for date formatting in PostgreSQL
-        const sql = 'SELECT id, name, dob, category, last_known_location, contact_info, description, image_url, status, TO_CHAR(reported_at, \'YYYY-MM-DD HH24:MI:SS\') AS reported_at_formatted FROM MISSING_PERSONS ORDER BY reported_at DESC';
+        const sql = 'SELECT id, name, dob, category, last_known_location, contact_info, description, image_url, status, TO_CHAR(reported_at, \'YYYY-MM-DD HH24:MI:SS\') AS reported_at_formatted FROM missing_persons ORDER BY reported_at DESC'; // Using lowercase 'missing_persons'
         const result = await pool.query(sql); // Use pool.query
         res.status(200).json(result.rows); // Access results.rows
     } catch (error) {
@@ -203,9 +204,9 @@ app.get('/api/missing-persons/search', async (req, res) => {
         const pool = await getDbConnection();
         let sql = `
             SELECT id, name, dob, last_known_location, contact_info, description, reported_at, category, status, image_url
-            FROM MISSING_PERSONS
+            FROM missing_persons
             WHERE (name ILIKE $1 OR description ILIKE $2 OR last_known_location ILIKE $3)
-        `; // Use ILIKE for case-insensitive search and $1, $2, $3
+        `; // Using lowercase 'missing_persons'
         const params = [`%${queryTerm}%`, `%${queryTerm}%`, `%${queryTerm}%`]; // Parameters for LIKE queries
 
         // Add category filter if provided and not 'all'
@@ -230,11 +231,11 @@ app.get('/api/success-stories', async (req, res) => {
         const pool = await getDbConnection();
         const query = `
             SELECT id, name, dob, last_known_location, contact_info, description, reported_at, category, image_url
-            FROM MISSING_PERSONS
+            FROM missing_persons
             WHERE status = 'found'
             ORDER BY reported_at DESC
             LIMIT 5;
-        `;
+        `; // Using lowercase 'missing_persons'
         const result = await pool.query(query); // Use pool.query
         res.status(200).json({ stories: result.rows }); // Access results.rows
     } catch (error) {
@@ -247,7 +248,7 @@ app.get('/api/success-stories', async (req, res) => {
 app.get('/api/volunteers', isAdmin, async (req, res) => {
     try {
         const pool = await getDbConnection();
-        const query = `SELECT id, name, email, phone, skills, availability, message, registered_at FROM VOLUNTEERS ORDER BY registered_at DESC`;
+        const query = `SELECT id, name, email, phone, skills, availability, message, registered_at FROM volunteers ORDER BY registered_at DESC`; // Using lowercase 'volunteers'
         const result = await pool.query(query); // Use pool.query
         res.status(200).json(result.rows); // Access results.rows
     } catch (error) {
@@ -262,7 +263,7 @@ app.patch('/api/missing-persons/:id/found', isAdmin, async (req, res) => {
 
     try {
         const pool = await getDbConnection();
-        const updateQuery = 'UPDATE MISSING_PERSONS SET status = $1 WHERE id = $2'; // Use $1, $2
+        const updateQuery = 'UPDATE missing_persons SET status = $1 WHERE id = $2'; // Using lowercase 'missing_persons'
         const result = await pool.query(updateQuery, ['found', personId]); // Use pool.query
 
         if (result.rowCount === 0) { // Check rowCount for affected rows
@@ -296,10 +297,10 @@ app.patch('/api/missing-persons/:id', isAdmin, async (req, res) => {
     try {
         const pool = await getDbConnection();
         const updateQuery = `
-            UPDATE MISSING_PERSONS
+            UPDATE missing_persons
             SET name = $1, dob = $2, category = $3, last_known_location = $4, contact_info = $5, description = $6
             WHERE id = $7
-        `; // Use $1-$7
+        `; // Using lowercase 'missing_persons'
         const result = await pool.query(updateQuery, [name, dob || null, category, last_known_location, contact_info, description || null, personId]); // Use pool.query
 
         if (result.rowCount === 0) { // Check rowCount
@@ -325,7 +326,7 @@ app.delete('/api/missing-persons/:id', isAdmin, async (req, res) => {
         await client.query('BEGIN'); // Start a transaction
 
         // 1. Get the image URL (if needed, but we won't delete the file on Vercel)
-        const selectQuery = 'SELECT image_url FROM MISSING_PERSONS WHERE id = $1'; // Use $1
+        const selectQuery = 'SELECT image_url FROM missing_persons WHERE id = $1'; // Using lowercase 'missing_persons'
         const personsResult = await client.query(selectQuery, [personId]); // Use client.query
 
         if (personsResult.rows.length === 0) { // Access rows.length
@@ -334,7 +335,7 @@ app.delete('/api/missing-persons/:id', isAdmin, async (req, res) => {
         }
 
         // 2. Delete the record from the database
-        const deleteQuery = 'DELETE FROM MISSING_PERSONS WHERE id = $1'; // Use $1
+        const deleteQuery = 'DELETE FROM missing_persons WHERE id = $1'; // Using lowercase 'missing_persons'
         const deleteResult = await client.query(deleteQuery, [personId]); // Use client.query
 
         if (deleteResult.rowCount === 0) { // Check rowCount
@@ -371,9 +372,9 @@ app.post('/api/volunteer/register', async (req, res) => {
     try {
         const pool = await getDbConnection();
         const query = `
-            INSERT INTO VOLUNTEERS (name, email, phone, skills, availability, message)
+            INSERT INTO volunteers (name, email, phone, skills, availability, message)
             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id
-        `; // Use $1-$6 and RETURNING id
+        `; // Using lowercase 'volunteers'
         const result = await pool.query(query, [name, email, phone || null, skills, availability, message || null]); // Use pool.query
 
         res.status(201).json({ message: 'Volunteer registered successfully!', volunteerId: result.rows[0].id }); // Access id from rows[0].id
