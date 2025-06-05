@@ -1,8 +1,22 @@
-// frontend/js/login.js (UPDATED CONTENT for robust error handling)
+// frontend/js/login.js (UPDATED CONTENT for Vercel deployment)
 
 document.addEventListener('DOMContentLoaded', () => {
     // Define your backend base URL for API calls.
-    const BASE_URL = 'http://localhost:3000'; // Ensure this is 5500!
+    //
+    // IMPORTANT:
+    // When deploying to Vercel, this MUST be your Vercel backend URL.
+    // Example: 'https://your-vercel-project-name.vercel.app'
+    //
+    // For local development, you would use: 'http://localhost:3000'
+    // (Assuming your Node.js backend runs on port 3000 locally)
+    //
+    // You could dynamically set this based on window.location.hostname for more advanced setups,
+    // or use environment variables during your build process if you have one (e.g., using Webpack, Vite).
+    //
+    // For now, MANUALLY CHANGE THIS when deploying vs. developing locally.
+    const BASE_URL = 'https://YOUR_VERCEL_BACKEND_URL'; // <--- **** CHANGE THIS ****
+                                                      // e.g., 'https://my-missing-person-app.vercel.app'
+                                                      // DO NOT USE 'http://localhost:3000' for deployed frontend!
 
     const loginForm = document.getElementById('loginForm');
     const loginMessage = document.getElementById('loginMessage'); // Assuming you have an element for messages
@@ -22,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             console.log('Frontend: Login button clicked.');
             console.log('Frontend: Attempting login with username:', username);
-            const loginApiUrl = `${BASE_URL}/api/login`;
+            const loginApiUrl = `${BASE_URL}/api/login`; // Ensure this matches your Vercel route for API
             console.log('Frontend: Sending request to URL:', loginApiUrl);
             console.log('Frontend: Request body being sent:', JSON.stringify({ username, password }));
 
@@ -39,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('Frontend: Received response. Status:', response.status);
                 console.log('Frontend: Is response OK (2xx status)?', response.ok);
 
-                // --- CRITICAL CHANGE STARTS HERE ---
+                // --- CRITICAL CHANGE STARTS HERE (Robust Error Handling) ---
                 // If response is NOT ok (e.g., 400, 401, 404, 500)
                 if (!response.ok) {
                     let errorData;
@@ -74,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Store user info if needed (e.g., for admin check)
-                localStorage.setItem('user', JSON.stringify(data.user));
+                localStorage.setItem('user', JSON.stringify(data.user)); // Ensure your backend sends `data.user`
 
                 // Redirect to homepage or dashboard after a short delay
                 setTimeout(() => {
@@ -84,8 +98,10 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 console.error('Error during login fetch:', error);
                 // This 'catch' is now primarily for network issues or issues with the fetch call itself
-                loginMessage.textContent = 'Could not connect to the server or unexpected error. Please check your network and try again later.';
-                loginMessage.style.color = 'red';
+                if (loginMessage) {
+                    loginMessage.textContent = 'Could not connect to the server or an unexpected network error occurred. Please check your network and try again later.';
+                    loginMessage.style.color = 'red';
+                }
             }
         });
     } else {
