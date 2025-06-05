@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // or use environment variables during your build process if you have one (e.g., using Webpack, Vite).
     //
     // For now, MANUALLY CHANGE THIS when deploying vs. developing locally.
-    const BASE_URL = 'https://YOUR_VERCEL_BACKEND_URL'; // <--- **** CHANGE THIS ****
+    const BASE_URL = 'https://the-broken-weave.vercel.app'; // <--- **** CHANGE THIS ****
                                                       // e.g., 'https://my-missing-person-app.vercel.app'
                                                       // DO NOT USE 'http://localhost:3000' for deployed frontend!
 
