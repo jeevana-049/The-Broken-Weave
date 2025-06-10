@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
             registerMessage.className = 'message'; // Reset class for styling
 
             try {
-                const response = await fetch('http://localhost:3000/api/register', {
+                const response = await fetch('https://the-broken-weave.vercel.app', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
