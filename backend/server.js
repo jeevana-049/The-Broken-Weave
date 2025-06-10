@@ -1,389 +1,307 @@
 require('dotenv').config(); // Load environment variables from .env file
 
 const express = require('express');
-const { Pool } = require('pg'); // Use pg for PostgreSQL
 const cors = require('cors');
 const bcrypt = require('bcrypt');
+const { createClient } = require('@supabase/supabase-js');
+const jwt = require('jsonwebtoken'); // Import jsonwebtoken for JWTs
 
 const app = express();
 
-// Middleware
-app.use(cors()); // Enables Cross-Origin Resource Sharing for all origins
-app.use(express.json()); // Parses JSON bodies of incoming requests
+// --- Middleware ---
+// Enable CORS for all routes, allowing your frontend to make requests
+app.use(cors());
+// Parse JSON bodies for incoming requests
+app.use(express.json());
 
-// --- Database Connection Pool Setup using environment variables ---
-let pool; // Declare pool outside the function to reuse connection across invocations
+// --- Supabase Client Setup ---
+// Load Supabase URL and Key from environment variables for security
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
 
-async function getDbConnection() {
-    if (!pool) {
-        try {
-            // Ensure DATABASE_URL environment variable is set
-            if (!process.env.DATABASE_URL) {
-                throw new Error('DATABASE_URL environment variable is not set. Please configure it.');
-            }
+// Initialize Supabase client
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-            pool = new Pool({
-                connectionString: process.env.DATABASE_URL,
-                ssl: {
-                    rejectUnauthorized: false // Required for connecting to Supabase (or Neon) from Vercel's serverless functions for free tier
-                }
-            });
-
-            console.log('PostgreSQL Database pool created successfully.');
-
-            // Optional: Test connection immediately after pool creation
-            const client = await pool.connect(); // Get a client from the pool
-            console.log('Successfully connected to PostgreSQL database via pool!');
-            client.release(); // Release the client back to the pool
-        } catch (err) {
-            console.error('Failed to initialize PostgreSQL database pool:', err);
-            // Re-throw the error to ensure Vercel deployment fails if DB connection is bad
-            throw err;
-        }
-    }
-    return pool;
+// --- JWT Secret ---
+// CRITICAL: Ensure JWT_SECRET is set in your .env file in development
+// and configured securely in your Vercel environment variables for production!
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret) {
+    console.error('FATAL ERROR: JWT_SECRET is not defined in environment variables!');
+    // In a production environment, you might want to exit the process
+    // process.exit(1);
+    // For development, you might just log an error or use a placeholder, but this is highly insecure.
 }
 
-// --- Middleware for Admin Protection ---
-const isAdmin = (req, res, next) => {
-    // This checks for a custom header 'x-user-is-admin' set to 'true'
-    // In a real application, you'd verify a JWT token or session.
-    if (req.headers['x-user-is-admin'] === 'true') {
-        next();
-    } else {
-        res.status(403).json({ message: 'Access denied. Administrator privileges required.' });
+// --- Middleware for JWT Authentication ---
+// Verifies the token sent by the client for protected routes
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    // Expected format: "Bearer YOUR_TOKEN"
+    const token = authHeader && authHeader.split(' ')[1]; 
+
+    if (token == null) {
+        return res.status(401).json({ message: 'Authentication token required.' }); // No token provided
     }
+
+    jwt.verify(token, jwtSecret, (err, user) => {
+        if (err) {
+            console.error('JWT verification error:', err.message); // Log the specific JWT error
+            // Token is invalid (e.g., malformed, expired, wrong signature)
+            return res.status(403).json({ message: 'Invalid or expired token.' }); 
+        }
+        // Attach the decoded user payload (from the token) to the request object
+        req.user = user; 
+        next(); // Proceed to the next middleware/route handler
+    });
 };
-// --- END ADMIN MIDDLEWARE ---
+
+// --- Middleware for Admin Protection ---
+// Uses the user information attached by authenticateToken to check for admin status
+const isAdmin = (req, res, next) => {
+    // Check if req.user exists (meaning authenticateToken ran successfully) and if isAdmin is true
+    if (!req.user || !req.user.isAdmin) {
+        return res.status(403).json({ message: 'Access denied. Administrator privileges required.' });
+    }
+    next(); // User is an admin, proceed
+};
 
 // --- API Routes ---
 
-// Health Check Route (Good for Vercel to verify deployment)
+// **Health Check**
+// A simple GET endpoint to check if the backend server is running
 app.get('/api/health', async (req, res) => {
     try {
-        const pool = await getDbConnection();
-        // Try a simple query to check database connectivity
-        await pool.query('SELECT 1');
-        res.status(200).json({ status: 'ok', message: 'Backend and Database are healthy!' });
+        res.status(200).json({ status: 'ok', message: 'Backend is running!' });
     } catch (error) {
         console.error('Health check failed:', error);
-        res.status(500).json({ status: 'error', message: 'Backend or Database unhealthy.', error: error.message });
+        res.status(500).json({ status: 'error', message: 'Backend unhealthy.', error: error.message });
     }
 });
 
-// 1. User Registration Route
+// **User Registration**
+// Handles new user account creation
 app.post('/api/register', async (req, res) => {
-    const { username, password, email } = req.body;
-
-    if (!username || !password || !email) {
-        return res.status(400).json({ message: 'Username, password, and email are required.' });
+    const { username, email, password } = req.body;
+    // Validate required fields
+    if (!username || !email || !password) {
+        return res.status(400).json({ message: 'Required fields (username, email, password) are missing.' });
     }
 
     try {
-        const pool = await getDbConnection(); // Get the connection pool
-        // Check if username or email already exists
-        const existingUsersQuery = 'SELECT id FROM users WHERE username = $1 OR email = $2'; // Using lowercase 'users'
-        const existingUsersResult = await pool.query(existingUsersQuery, [username, email]);
+        // Check if username or email already exists in the USERS table
+        const { data: existingUsers, error: fetchError } = await supabase
+            .from('USERS')
+            .select('id')
+            .or(`username.eq.${username},email.eq.${email}`); // Check if either username or email matches
 
-        if (existingUsersResult.rows.length > 0) { // Access results.rows
-            return res.status(409).json({ message: 'Username or Email already exists.' });
+        if (fetchError) {
+            console.error('Supabase fetch error during registration check:', fetchError);
+            return res.status(500).json({ message: 'Server error checking existing users.', error: fetchError.message });
         }
 
-        // Hash password before storing
-        const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        if (existingUsers.length > 0) {
+            return res.status(409).json({ message: 'Username or Email already exists.' }); // 409 Conflict
+        }
 
-        // Insert new user into the database
-        // Use RETURNING id to get the newly inserted ID in PostgreSQL
-        // Use 'FALSE' for boolean type instead of '0' for better PostgreSQL compatibility
-        const insertUserQuery = 'INSERT INTO users (username, password, email, is_admin) VALUES ($1, $2, $3, FALSE) RETURNING id'; // Using lowercase 'users'
-        const insertUserResult = await pool.query(insertUserQuery, [username, hashedPassword, email]);
+        // Hash the password before storing it for security
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Access the inserted ID from results.rows[0].id
-        res.status(201).json({ message: 'User registered successfully!', userId: insertUserResult.rows[0].id });
+        // Insert the new user into the USERS table
+        const { data, error: insertError } = await supabase
+            .from('USERS')
+            .insert([{ username, email, password: hashedPassword, is_admin: false }]) // Default new users to not admin
+            .select('id'); // Return the ID of the newly created user
 
+        if (insertError) {
+            console.error('Supabase insert error during registration:', insertError);
+            return res.status(500).json({ message: 'Server error during user registration.', error: insertError.message });
+        }
+        if (!data || data.length === 0) {
+            return res.status(500).json({ message: 'User registration failed, no data returned from Supabase.' });
+        }
+
+        res.status(201).json({ message: 'User registered successfully!', userId: data[0].id });
     } catch (error) {
-        console.error('Error during registration:', error);
-        // Specific error code for unique constraint violation in PostgreSQL (23505)
-        if (error.code === '23505') {
-            return res.status(409).json({ message: 'Username or Email already exists.' });
-        }
+        console.error('Registration error:', error);
         res.status(500).json({ message: 'Server error during registration.', error: error.message });
     }
 });
 
-// 2. User Login Route
+// **User Login**
+// Handles user authentication and issues a JWT upon successful login
 app.post('/api/login', async (req, res) => {
-    console.log('--- Backend: /api/login POST route reached! ---');
     const { username, password } = req.body;
-
+    // Validate required fields
     if (!username || !password) {
-        return res.status(400).json({ message: 'Username and password are required.' });
+        return res.status(400).json({ message: 'Required fields (username, password) are missing.' });
     }
 
     try {
-        const pool = await getDbConnection(); // Get the connection pool
-        // Retrieve user by username
-        const selectUserQuery = 'SELECT id, username, password, is_admin FROM users WHERE username = $1'; // Using lowercase 'users'
-        const usersResult = await pool.query(selectUserQuery, [username]);
+        // Fetch the user by username from the USERS table
+        const { data: users, error: fetchError } = await supabase
+            .from('USERS')
+            .select('id, username, password, is_admin')
+            .eq('username', username)
+            .limit(1); // Limit to 1 as username should be unique
 
-        if (usersResult.rows.length === 0) { // Access results.rows
-            return res.status(401).json({ message: 'Invalid username or password.' });
+        if (fetchError) {
+            console.error('Supabase fetch error during login:', fetchError);
+            return res.status(500).json({ message: 'Server error during login.', error: fetchError.message });
         }
 
-        const user = usersResult.rows[0]; // Access results.rows[0]
-        const hashedPassword = user.password;
-
-        // Compare provided password with hashed password
-        const passwordMatch = await bcrypt.compare(password, hashedPassword);
-
-        if (passwordMatch) {
-            res.status(200).json({
-                message: 'Login successful!',
-                user: {
-                    id: user.id,
-                    username: user.username,
-                    is_admin: user.is_admin
-                }
-            });
-        } else {
-            res.status(401).json({ message: 'Invalid username or password.' });
+        // Check if user exists
+        if (!users || users.length === 0) {
+            return res.status(401).json({ message: 'Invalid username or password.' }); // 401 Unauthorized
         }
 
+        const user = users[0];
+        // Compare the provided password with the hashed password in the database
+        const passwordMatch = await bcrypt.compare(password, user.password);
+
+        if (!passwordMatch) {
+            return res.status(401).json({ message: 'Invalid username or password.' }); // 401 Unauthorized
+        }
+
+        // Generate a JWT upon successful login
+        const token = jwt.sign(
+            { id: user.id, username: user.username, isAdmin: user.is_admin }, // Payload for the token
+            jwtSecret, // Your secret key from .env
+            { expiresIn: '1h' } // Token expires in 1 hour (adjust as needed)
+        );
+
+        // Remove the hashed password from the user object before sending it to the client for security
+        const { password: userPassword, ...userWithoutPassword } = user;
+
+        res.status(200).json({ message: 'Login successful!', user: userWithoutPassword, token });
     } catch (error) {
-        console.error('Error during login:', error);
+        console.error('Login error:', error);
         res.status(500).json({ message: 'Server error during login.', error: error.message });
     }
 });
 
-// 3. Report Missing Person Route (Image Uploads Disabled for Vercel)
-app.post('/api/missing-persons', async (req, res) => {
-    const { name, dob, category, last_known_location, contact_info, description } = req.body;
-    const imageUrl = null; // Image uploads are disabled for Vercel deployment
-
-    if (!name || !category || !last_known_location || !contact_info) {
-        return res.status(400).json({ message: 'Missing required fields: name, category, last_known_location, contact_info.' });
-    }
-
+// **Fetch All Users (Admin Only)**
+// Retrieves all users from the USERS table (requires admin privileges via JWT)
+// The order of middleware matters: authenticateToken first, then isAdmin
+app.get('/api/users', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const pool = await getDbConnection(); // Get the connection pool
-        const query = `
-            INSERT INTO missing_persons (name, dob, category, last_known_location, contact_info, description, image_url, reported_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id
-        `; // Using lowercase 'missing_persons'
-        const result = await pool.query(query, [name, dob || null, category, last_known_location, contact_info, description || null, imageUrl]);
+        const { data, error } = await supabase
+            .from('USERS')
+            .select('id, username, email, is_admin'); // Select specific fields
 
-        res.status(201).json({ message: 'Missing person reported successfully!', id: result.rows[0].id, imageUrl: imageUrl }); // Access id from rows[0].id
+        if (error) {
+            console.error('Supabase fetch error fetching users:', error);
+            return res.status(500).json({ message: 'Error fetching users.', error: error.message });
+        }
+        // Correctly check for no users found (Supabase returns an empty array)
+        if (data.length === 0) {
+            return res.status(404).json({ message: 'No users found.' });
+        }
+
+        res.status(200).json({ count: data.length, users: data });
     } catch (error) {
-        console.error('Error reporting missing person:', error);
-        res.status(500).json({ message: 'Server error reporting missing person.', error: error.message });
+        console.error('Fetching users error:', error);
+        res.status(500).json({ message: 'Error fetching users.', error: error.message });
     }
 });
 
-// API Endpoint to Get All Missing Persons
+// **Fetch All Volunteers**
+// Retrieves all volunteers from the VOLUNTEERS table
+// This endpoint currently does NOT require authentication.
+app.get('/api/volunteers', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('VOLUNTEERS')
+            .select('*') // Select all columns
+            .order('joined_at', { ascending: false }); // Order by join date, newest first
+
+        if (error) {
+            console.error('Supabase fetch error fetching volunteers:', error);
+            return res.status(500).json({ message: 'Error fetching volunteers.', error: error.message });
+        }
+        // Correctly check for no volunteers found
+        if (data.length === 0) {
+            return res.status(404).json({ message: 'No volunteers found.' });
+        }
+
+        res.status(200).json({ count: data.length, volunteers: data });
+    } catch (error) {
+        console.error('Fetching error:', error);
+        res.status(500).json({ message: 'Error fetching volunteers.', error: error.message });
+    }
+});
+
+// **Report a Missing Person**
+// Handles the submission of a new missing person report
+// You might want to add `authenticateToken` here if only logged-in users can report.
+app.post('/api/report-missing', async (req, res) => {
+    const { name, age, last_seen_location, contact_info, description } = req.body;
+
+    // Basic validation for required fields
+    if (!name || !last_seen_location || !contact_info || !description) {
+        return res.status(400).json({ message: 'Required fields (name, last_seen_location, contact_info, description) are missing.' });
+    }
+
+    try {
+        // Insert the new missing person record into the MISSING_PERSONS table
+        const { data, error } = await supabase
+            .from('MISSING_PERSONS')
+            .insert([
+                {
+                    name,
+                    age: age || null, // Age is optional; if not provided, store as null
+                    last_seen_location,
+                    contact_info,
+                    description,
+                    reported_at: new Date().toISOString() // Automatically set the current time
+                }
+            ])
+            .select('*'); // Return the inserted row data
+
+        if (error) {
+            console.error('Supabase insert error reporting missing person:', error);
+            return res.status(500).json({ message: 'Error reporting missing person.', error: error.message });
+        }
+        if (!data || data.length === 0) {
+            return res.status(500).json({ message: 'Missing person report failed, no data returned from Supabase.' });
+        }
+
+        res.status(201).json({ message: 'Missing person reported successfully!', missingPerson: data[0] });
+    } catch (error) {
+        console.error('Reporting missing person error:', error);
+        res.status(500).json({ message: 'Server error when reporting missing person.', error: error.message });
+    }
+});
+
+// **Fetch All Missing Persons**
+// Retrieves all reported missing persons from the MISSING_PERSONS table
+// This endpoint currently does NOT require authentication.
 app.get('/api/missing-persons', async (req, res) => {
     try {
-        const pool = await getDbConnection();
-        // Fetches all missing persons, formatted date for readability
-        // Use TO_CHAR for date formatting in PostgreSQL
-        const sql = 'SELECT id, name, dob, category, last_known_location, contact_info, description, image_url, status, TO_CHAR(reported_at, \'YYYY-MM-DD HH24:MI:SS\') AS reported_at_formatted FROM missing_persons ORDER BY reported_at DESC'; // Using lowercase 'missing_persons'
-        const result = await pool.query(sql); // Use pool.query
-        res.status(200).json(result.rows); // Access results.rows
-    } catch (error) {
-        console.error('Error fetching missing persons:', error);
-        res.status(500).json({ message: 'Error fetching missing persons', error: error.message });
-    }
-});
+        const { data, error } = await supabase
+            .from('MISSING_PERSONS')
+            .select('*') // Select all columns
+            .order('reported_at', { ascending: false }); // Order by reported date, newest first
 
-// 4. Search Missing Persons Route
-app.get('/api/missing-persons/search', async (req, res) => {
-    const queryTerm = req.query.q || ''; // Search term from query parameter 'q'
-    const categoryFilter = req.query.category || ''; // Category filter from query parameter 'category'
-
-    try {
-        const pool = await getDbConnection();
-        let sql = `
-            SELECT id, name, dob, last_known_location, contact_info, description, reported_at, category, status, image_url
-            FROM missing_persons
-            WHERE (name ILIKE $1 OR description ILIKE $2 OR last_known_location ILIKE $3)
-        `; // Using lowercase 'missing_persons'
-        const params = [`%${queryTerm}%`, `%${queryTerm}%`, `%${queryTerm}%`]; // Parameters for LIKE queries
-
-        // Add category filter if provided and not 'all'
-        if (categoryFilter && categoryFilter !== 'all') {
-            sql += ` AND category = $4`; // Use $4 for new parameter
-            params.push(categoryFilter);
+        if (error) {
+            console.error('Supabase fetch error fetching missing persons:', error);
+            return res.status(500).json({ message: 'Error fetching missing persons.', error: error.message });
+        }
+        // Correctly check for no missing persons found
+        if (data.length === 0) {
+            return res.status(404).json({ message: 'No missing persons found.' });
         }
 
-        sql += ` ORDER BY reported_at DESC`; // Order by most recently reported
-
-        const result = await pool.query(sql, params); // Use pool.query
-        res.status(200).json({ results: result.rows }); // Access results.rows
+        res.status(200).json({ count: data.length, missingPersons: data });
     } catch (error) {
-        console.error('Error during search:', error);
-        res.status(500).json({ message: 'Server error during search.', error: error.message });
+        console.error('Fetching error:', error);
+        res.status(500).json({ message: 'Error fetching missing persons.', error: error.message });
     }
 });
 
-// 5. Get Success Stories Route (Found Persons)
-app.get('/api/success-stories', async (req, res) => {
-    try {
-        const pool = await getDbConnection();
-        const query = `
-            SELECT id, name, dob, last_known_location, contact_info, description, reported_at, category, image_url
-            FROM missing_persons
-            WHERE status = 'found'
-            ORDER BY reported_at DESC
-            LIMIT 5;
-        `; // Using lowercase 'missing_persons'
-        const result = await pool.query(query); // Use pool.query
-        res.status(200).json({ stories: result.rows }); // Access results.rows
-    } catch (error) {
-        console.error('Error fetching success stories:', error);
-        res.status(500).json({ message: 'Server error while fetching stories.', error: error.message });
-    }
+// **Server Startup**
+// Define the port to listen on, defaulting to 3000
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
 });
-
-// API Endpoint to Get All Volunteers (Admin Protected)
-app.get('/api/volunteers', isAdmin, async (req, res) => {
-    try {
-        const pool = await getDbConnection();
-        const query = `SELECT id, name, email, phone, skills, availability, message, registered_at FROM volunteers ORDER BY registered_at DESC`; // Using lowercase 'volunteers'
-        const result = await pool.query(query); // Use pool.query
-        res.status(200).json(result.rows); // Access results.rows
-    } catch (error) {
-        console.error('Error fetching volunteers:', error);
-        res.status(500).json({ message: 'Server error fetching volunteers.', error: error.message });
-    }
-});
-
-// 6. Update Missing Person Status (Mark as Found) Route (Admin Protected)
-app.patch('/api/missing-persons/:id/found', isAdmin, async (req, res) => {
-    const personId = req.params.id;
-
-    try {
-        const pool = await getDbConnection();
-        const updateQuery = 'UPDATE missing_persons SET status = $1 WHERE id = $2'; // Using lowercase 'missing_persons'
-        const result = await pool.query(updateQuery, ['found', personId]); // Use pool.query
-
-        if (result.rowCount === 0) { // Check rowCount for affected rows
-            return res.status(404).json({ message: 'Missing person not found.' });
-        }
-
-        res.status(200).json({ message: `Missing person with ID ${personId} marked as found.` });
-
-    } catch (error) {
-        console.error('Error marking missing person as found:', error);
-        res.status(500).json({ message: 'Server error marking person as found.', error: error.message });
-    }
-});
-
-// API Endpoint to Update Missing Person's Photo (Admin Protected) - Image upload disabled for Vercel
-app.patch('/api/missing-persons/:id/image', isAdmin, async (req, res) => {
-    const personId = req.params.id;
-    console.warn('Image upload functionality is disabled for Vercel serverless functions.');
-    return res.status(501).json({ message: 'Image upload is temporarily disabled. Please contact support.' }); // 501 Not Implemented
-});
-
-// NEW: API Endpoint to Update ALL Missing Person Details (Admin Protected)
-app.patch('/api/missing-persons/:id', isAdmin, async (req, res) => {
-    const personId = req.params.id;
-    const { name, dob, category, last_known_location, contact_info, description } = req.body;
-
-    if (!name || !category || !last_known_location || !contact_info) {
-        return res.status(400).json({ message: 'Missing required fields: name, category, last_known_location, contact_info.' });
-    }
-
-    try {
-        const pool = await getDbConnection();
-        const updateQuery = `
-            UPDATE missing_persons
-            SET name = $1, dob = $2, category = $3, last_known_location = $4, contact_info = $5, description = $6
-            WHERE id = $7
-        `; // Using lowercase 'missing_persons'
-        const result = await pool.query(updateQuery, [name, dob || null, category, last_known_location, contact_info, description || null, personId]); // Use pool.query
-
-        if (result.rowCount === 0) { // Check rowCount
-            return res.status(404).json({ message: 'Missing person not found or no changes made.' });
-        }
-
-        res.status(200).json({ message: `Missing person ID ${personId} details updated successfully.` });
-
-    } catch (error) {
-        console.error('Error updating missing person details:', error);
-        res.status(500).json({ message: 'Server error updating details.', error: error.message });
-    }
-});
-
-// NEW: API Endpoint to Delete Missing Person (Admin Protected)
-app.delete('/api/missing-persons/:id', isAdmin, async (req, res) => {
-    const personId = req.params.id;
-    let client; // Declare client for finally block for transactions
-
-    try {
-        const pool = await getDbConnection(); // Get the connection pool
-        client = await pool.connect(); // Get a client for transaction
-        await client.query('BEGIN'); // Start a transaction
-
-        // 1. Get the image URL (if needed, but we won't delete the file on Vercel)
-        const selectQuery = 'SELECT image_url FROM missing_persons WHERE id = $1'; // Using lowercase 'missing_persons'
-        const personsResult = await client.query(selectQuery, [personId]); // Use client.query
-
-        if (personsResult.rows.length === 0) { // Access rows.length
-            await client.query('ROLLBACK');
-            return res.status(404).json({ message: 'Missing person not found.' });
-        }
-
-        // 2. Delete the record from the database
-        const deleteQuery = 'DELETE FROM missing_persons WHERE id = $1'; // Using lowercase 'missing_persons'
-        const deleteResult = await client.query(deleteQuery, [personId]); // Use client.query
-
-        if (deleteResult.rowCount === 0) { // Check rowCount
-            await client.query('ROLLBACK');
-            return res.status(404).json({ message: 'Missing person not found or already deleted.' });
-        }
-
-        console.warn('Image file deletion functionality is disabled for Vercel serverless functions.');
-
-        await client.query('COMMIT'); // Commit the transaction
-        res.status(200).json({ message: `Missing person ID ${personId} deleted successfully (image file not deleted from server).` });
-
-    } catch (error) {
-        if (client) { // Check if client was successfully obtained
-            await client.query('ROLLBACK'); // Rollback on error
-        }
-        console.error('Error deleting missing person:', error);
-        res.status(500).json({ message: 'Server error deleting missing person.', error: error.message });
-    } finally {
-        if (client) {
-            client.release(); // Always release the client back to the pool
-        }
-    }
-});
-
-// API Endpoint for Volunteer Registration
-app.post('/api/volunteer/register', async (req, res) => {
-    const { name, email, phone, skills, availability, message } = req.body;
-
-    if (!name || !email || !skills || !availability) {
-        return res.status(400).json({ message: 'Name, email, skills, and availability are required fields for volunteer registration.' });
-    }
-
-    try {
-        const pool = await getDbConnection();
-        const query = `
-            INSERT INTO volunteers (name, email, phone, skills, availability, message)
-            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id
-        `; // Using lowercase 'volunteers'
-        const result = await pool.query(query, [name, email, phone || null, skills, availability, message || null]); // Use pool.query
-
-        res.status(201).json({ message: 'Volunteer registered successfully!', volunteerId: result.rows[0].id }); // Access id from rows[0].id
-
-    } catch (error) {
-        console.error('Error during volunteer registration:', error);
-        res.status(500).json({ message: 'Server error during volunteer registration.', error: error.message });
-    }
-});
-
-// --- FINAL EXPORT FOR VERCEL ---
-module.exports = app;
